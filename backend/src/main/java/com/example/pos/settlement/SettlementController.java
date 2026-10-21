@@ -6,6 +6,7 @@ import com.example.pos.customer.Customer;
 import com.example.pos.customer.CustomerRepository;
 import com.example.pos.order.RestaurantOrder;
 import com.example.pos.order.RestaurantOrderRepository;
+import com.example.pos.outlet.OutletRepository;
 import com.example.pos.table.DiningTable;
 import com.example.pos.table.DiningTableRepository;
 import org.springframework.http.HttpStatus;
@@ -25,19 +26,22 @@ public class SettlementController {
     private final DiningTableRepository tableRepository;
     private final RestaurantOrderRepository orderRepository;
     private final CustomerRepository customerRepository;
+    private final OutletRepository outletRepository;
 
     public SettlementController(
             SettlementRepository settlementRepository,
             BillRepository billRepository,
             DiningTableRepository tableRepository,
             RestaurantOrderRepository orderRepository,
-            CustomerRepository customerRepository
+            CustomerRepository customerRepository,
+            OutletRepository outletRepository
     ) {
         this.settlementRepository = settlementRepository;
         this.billRepository = billRepository;
         this.tableRepository = tableRepository;
         this.orderRepository = orderRepository;
         this.customerRepository = customerRepository;
+        this.outletRepository = outletRepository;
     }
 
     @GetMapping
@@ -67,6 +71,14 @@ public class SettlementController {
         }
         if (request.getSettledAt() == null) {
             request.setSettledAt(LocalDateTime.now());
+        }
+
+        // Auto-resolve outlet ID if only name was provided
+        if (request.getOutletId() == null && request.getOutletName() != null) {
+            outletRepository.findAll().stream()
+                .filter(o -> o.getName().equalsIgnoreCase(request.getOutletName()))
+                .findFirst()
+                .ifPresent(o -> request.setOutletId(o.getId()));
         }
 
         // 2. Save Settlement in MSSQL

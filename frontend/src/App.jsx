@@ -676,8 +676,9 @@ function App() {
       cashTendered: payMethod === 'Cash' ? (parseFloat(cashTendered) || grandTotal) : grandTotal,
       changeReturned: payMethod === 'Cash' ? Math.max(0, (parseFloat(cashTendered) || grandTotal) - grandTotal) : 0,
       paymentReference: payMethod === 'UPI' ? 'UPI-TXN-' + Date.now() : payMethod === 'Card' ? 'POS-CARD-' + Date.now() : 'CASH',
+      outletId: selectedOutlet?.id || activeOutletId || null,
       outletName: selectedOutlet?.name || 'Tableflow POS',
-      cashierName: 'Admin / Cashier',
+      cashierName: currentUser?.fullName || currentUser?.username || 'Admin / Cashier',
       status: 'COMPLETED'
     };
 
@@ -736,9 +737,32 @@ function App() {
         setOrders(prev => prev.map(o => o.tableCode === selectedTableId ? { ...o, status: 'Completed' } : o));
       }
 
-      // Background sync
-      api.getCustomers().then(data => setCustomers(data)).catch(() => {});
-      api.getAnalyticsSummary().then(data => setAnalytics(data)).catch(() => {});
+      // Background sync with active outlet ID
+      if (activeOutletId) {
+        api.getCustomers(activeOutletId).then(data => setCustomers(data)).catch(() => {});
+        api.getAnalyticsSummary(activeOutletId).then(data => setAnalytics(data)).catch(() => {});
+        api.getSettlements(activeOutletId).then(data => setSettlements(data)).catch(() => {});
+        api.getBills(activeOutletId).then(data => {
+          if (Array.isArray(data)) {
+            setBills(data.map(b => ({
+              ...b,
+              items: typeof b.itemsJson === 'string' ? JSON.parse(b.itemsJson || '[]') : (b.items || [])
+            })));
+          }
+        }).catch(() => {});
+      } else {
+        api.getCustomers().then(data => setCustomers(data)).catch(() => {});
+        api.getAnalyticsSummary().then(data => setAnalytics(data)).catch(() => {});
+        api.getSettlements().then(data => setSettlements(data)).catch(() => {});
+        api.getBills().then(data => {
+          if (Array.isArray(data)) {
+            setBills(data.map(b => ({
+              ...b,
+              items: typeof b.itemsJson === 'string' ? JSON.parse(b.itemsJson || '[]') : (b.items || [])
+            })));
+          }
+        }).catch(() => {});
+      }
 
       setShowPayModal(false);
       clearCart();
