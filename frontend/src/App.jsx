@@ -618,6 +618,7 @@ function App() {
       ? `Delivery (${cartCustomer.deliveryPartner || 'Partner'})`
       : `Takeaway #${Math.floor(10 + Math.random() * 89)}`;
 
+    const oid = selectedOutlet?.id || currentUser?.outletId || 1;
     const orderPayload = {
       orderNumber,
       tableCode,
@@ -630,7 +631,8 @@ function App() {
       total: itemsToFire.reduce((s, i) => s + (i.price * i.qty), 0),
       customerName: cartCustomer.name || (isDelivery ? 'Delivery Customer' : 'Walk-in'),
       customerPhone: cartCustomer.phone || '',
-      notes: orderNotes
+      notes: orderNotes,
+      outletId: oid
     };
 
     try {
@@ -908,7 +910,7 @@ function App() {
         />
 
         {/* Dynamic Content Area */}
-        <div className="content">
+        <div className={`content ${active === 'POS Terminal' ? 'pos-screen-content' : ''}`}>
           {active === 'Overview' && (
             <OverviewScreen
               setActive={setActive}
@@ -959,6 +961,12 @@ function App() {
               grandTotal={grandTotal}
               handleSendKOT={handleSendKOT}
               setShowPayModal={setShowPayModal}
+              orders={orders}
+              setOrders={setOrders}
+              selectedOutlet={selectedOutlet}
+              setNotice={setNotice}
+              setActiveReceipt={setActiveReceipt}
+              setShowReceiptModal={setShowReceiptModal}
             />
           )}
 

@@ -18,7 +18,8 @@ export default function PosCartDrawer({
   sgst,
   grandTotal,
   handleSendKOT,
-  setShowPayModal
+  setShowPayModal,
+  onSwitchToOnlineHub
 }) {
   const newItemsCount = cart.reduce((sum, item) => sum + Math.max(0, item.qty - (item.kotSentQty || 0)), 0);
 
@@ -43,18 +44,36 @@ export default function PosCartDrawer({
       </div>
 
       {/* Customer quick capture & Delivery details */}
-      <div className="cart-customer-box" style={orderType === 'Delivery' ? { display: 'flex', flexDirection: 'column', gap: '8px' } : {}}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-          <input
-            placeholder={orderType === 'Delivery' ? 'Customer Name (Required)' : 'Customer Name (Optional)'}
-            value={cartCustomer.name || ''}
-            onChange={e => setCartCustomer({ ...cartCustomer, name: e.target.value })}
-          />
-          <input
-            placeholder={orderType === 'Delivery' ? 'Phone Number (Required)' : 'Phone (for GST/Bill)'}
-            value={cartCustomer.phone || ''}
-            onChange={e => setCartCustomer({ ...cartCustomer, phone: e.target.value })}
-          />
+      <div className="cart-customer-box">
+        {orderType === 'Delivery' && onSwitchToOnlineHub && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#e0f2fe', padding: '5px 8px', borderRadius: '5px', fontSize: '10px', color: '#0369a1', border: '1px solid #bae6fd', marginBottom: '2px' }}>
+            <span>📞 Manual Phone Order</span>
+            <button 
+              onClick={onSwitchToOnlineHub}
+              style={{ border: 0, background: '#0284c7', color: '#fff', padding: '2px 7px', borderRadius: '4px', fontSize: '9px', fontWeight: 700, cursor: 'pointer' }}
+            >
+              Back to Online Orders
+            </button>
+          </div>
+        )}
+
+        <div className="cart-customer-row">
+          <div className="cart-customer-field">
+            <label>Customer Name {orderType === 'Delivery' && <span style={{ color: '#dc2626' }}>*</span>}</label>
+            <input
+              placeholder="e.g. Rahul Sharma"
+              value={cartCustomer.name || ''}
+              onChange={e => setCartCustomer({ ...cartCustomer, name: e.target.value })}
+            />
+          </div>
+          <div className="cart-customer-field">
+            <label>Mobile No. {orderType === 'Delivery' && <span style={{ color: '#dc2626' }}>*</span>}</label>
+            <input
+              placeholder="e.g. 9876543210"
+              value={cartCustomer.phone || ''}
+              onChange={e => setCartCustomer({ ...cartCustomer, phone: e.target.value })}
+            />
+          </div>
         </div>
 
         {orderType === 'Delivery' && (
@@ -149,7 +168,7 @@ export default function PosCartDrawer({
       <div className="cart-items-scroll">
         {cart.length === 0 ? (
           <div className="cart-empty">
-            <ShoppingBag size={38} />
+            <ShoppingBag size={26} />
             <strong>Order cart is empty</strong>
             <p style={{ margin: 0 }}>Select dishes from the menu to build invoice.</p>
           </div>

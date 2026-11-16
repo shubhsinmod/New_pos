@@ -1,5 +1,7 @@
 package com.example.pos.order;
 
+import com.example.pos.outlet.Outlet;
+import com.example.pos.outlet.OutletRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
@@ -11,9 +13,11 @@ import java.util.Map;
 @CrossOrigin(origins = "*")
 public class OrderController {
     private final RestaurantOrderRepository repository;
+    private final OutletRepository outletRepository;
 
-    public OrderController(RestaurantOrderRepository repository) {
+    public OrderController(RestaurantOrderRepository repository, OutletRepository outletRepository) {
         this.repository = repository;
+        this.outletRepository = outletRepository;
     }
 
     @GetMapping
@@ -32,6 +36,13 @@ public class OrderController {
         }
         if (order.getStatus() == null) {
             order.setStatus("In Kitchen");
+        }
+        if (order.getOutletId() == null) {
+            Long defaultOutletId = outletRepository.findAll().stream()
+                    .map(Outlet::getId)
+                    .findFirst()
+                    .orElse(1L);
+            order.setOutletId(defaultOutletId);
         }
         return repository.save(order);
     }
