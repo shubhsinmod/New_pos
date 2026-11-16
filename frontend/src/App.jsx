@@ -658,6 +658,7 @@ function App() {
     const items = cart.map(c => ({ name: c.product.name, qty: c.qty, price: c.product.price }));
     const billNum = `BILL-${Math.floor(9000 + Math.random() * 1000)}`;
     const stlNum = `STL-${Math.floor(1000 + Math.random() * 9000)}`;
+    const currentOutletId = selectedOutlet?.id || null;
 
     const settlementPayload = {
       settlementNumber: stlNum,
@@ -676,7 +677,7 @@ function App() {
       cashTendered: payMethod === 'Cash' ? (parseFloat(cashTendered) || grandTotal) : grandTotal,
       changeReturned: payMethod === 'Cash' ? Math.max(0, (parseFloat(cashTendered) || grandTotal) - grandTotal) : 0,
       paymentReference: payMethod === 'UPI' ? 'UPI-TXN-' + Date.now() : payMethod === 'Card' ? 'POS-CARD-' + Date.now() : 'CASH',
-      outletId: selectedOutlet?.id || activeOutletId || null,
+      outletId: currentOutletId,
       outletName: selectedOutlet?.name || 'Tableflow POS',
       cashierName: currentUser?.fullName || currentUser?.username || 'Admin / Cashier',
       status: 'COMPLETED'
@@ -738,11 +739,11 @@ function App() {
       }
 
       // Background sync with active outlet ID
-      if (activeOutletId) {
-        api.getCustomers(activeOutletId).then(data => setCustomers(data)).catch(() => {});
-        api.getAnalyticsSummary(activeOutletId).then(data => setAnalytics(data)).catch(() => {});
-        api.getSettlements(activeOutletId).then(data => setSettlements(data)).catch(() => {});
-        api.getBills(activeOutletId).then(data => {
+      if (currentOutletId) {
+        api.getCustomers(currentOutletId).then(data => setCustomers(data)).catch(() => {});
+        api.getAnalyticsSummary(currentOutletId).then(data => setAnalytics(data)).catch(() => {});
+        api.getSettlements(currentOutletId).then(data => setSettlements(data)).catch(() => {});
+        api.getBills(currentOutletId).then(data => {
           if (Array.isArray(data)) {
             setBills(data.map(b => ({
               ...b,
