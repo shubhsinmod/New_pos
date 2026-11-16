@@ -1,5 +1,5 @@
 import React from 'react';
-import { CreditCard, Printer, ShoppingBag, Trash2 } from 'lucide-react';
+import { Bike, CreditCard, Printer, ShoppingBag, Trash2 } from 'lucide-react';
 
 export default function PosCartDrawer({
   orderType,
@@ -27,7 +27,13 @@ export default function PosCartDrawer({
       <div className="cart-header">
         <div className="cart-header-title">
           <h3>Active Order Cart</h3>
-          <span>{orderType} {orderType === 'Dine-In' ? `· Table ${selectedTableId}` : ''}</span>
+          <span>
+            {orderType === 'Dine-In'
+              ? `Dine-In · Table ${selectedTableId}`
+              : orderType === 'Delivery'
+              ? `Delivery · ${cartCustomer.deliveryPartner || 'Home Delivery'}`
+              : 'Takeaway (Parcel)'}
+          </span>
         </div>
         {cart.length > 0 && (
           <button className="cart-clear-btn" onClick={clearCart}>
@@ -36,18 +42,107 @@ export default function PosCartDrawer({
         )}
       </div>
 
-      {/* Customer quick capture */}
-      <div className="cart-customer-box">
-        <input
-          placeholder="Customer Name (Optional)"
-          value={cartCustomer.name}
-          onChange={e => setCartCustomer({ ...cartCustomer, name: e.target.value })}
-        />
-        <input
-          placeholder="Phone (for GST/Bill)"
-          value={cartCustomer.phone}
-          onChange={e => setCartCustomer({ ...cartCustomer, phone: e.target.value })}
-        />
+      {/* Customer quick capture & Delivery details */}
+      <div className="cart-customer-box" style={orderType === 'Delivery' ? { display: 'flex', flexDirection: 'column', gap: '8px' } : {}}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+          <input
+            placeholder={orderType === 'Delivery' ? 'Customer Name (Required)' : 'Customer Name (Optional)'}
+            value={cartCustomer.name || ''}
+            onChange={e => setCartCustomer({ ...cartCustomer, name: e.target.value })}
+          />
+          <input
+            placeholder={orderType === 'Delivery' ? 'Phone Number (Required)' : 'Phone (for GST/Bill)'}
+            value={cartCustomer.phone || ''}
+            onChange={e => setCartCustomer({ ...cartCustomer, phone: e.target.value })}
+          />
+        </div>
+
+        {orderType === 'Delivery' && (
+          <div
+            className="cart-delivery-box"
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '6px',
+              background: '#f0fdf4',
+              padding: '8px 10px',
+              borderRadius: '6px',
+              border: '1px solid #bbf7d0'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: '10px', fontWeight: 700, color: '#166534', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <Bike size={13} /> Delivery Partner:
+              </span>
+              <select
+                style={{
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  padding: '3px 8px',
+                  borderRadius: '4px',
+                  border: '1px solid #86efac',
+                  background: '#ffffff',
+                  color: '#166534',
+                  cursor: 'pointer',
+                  outline: 'none'
+                }}
+                value={cartCustomer.deliveryPartner || 'In-House Rider'}
+                onChange={e => setCartCustomer({ ...cartCustomer, deliveryPartner: e.target.value })}
+              >
+                <option value="In-House Rider">🛵 In-House Staff</option>
+                <option value="Zomato">🔴 Zomato</option>
+                <option value="Swiggy">🟠 Swiggy</option>
+                <option value="Dunzo">⚡ Dunzo / Porter</option>
+              </select>
+            </div>
+
+            <textarea
+              rows={2}
+              placeholder="Delivery Address (Flat / House No, Street, Landmark)..."
+              value={cartCustomer.address || ''}
+              onChange={e => setCartCustomer({ ...cartCustomer, address: e.target.value })}
+              style={{
+                width: '100%',
+                border: '1px solid #cbd5e1',
+                borderRadius: '5px',
+                padding: '6px 8px',
+                fontSize: '10px',
+                resize: 'none',
+                fontFamily: 'inherit',
+                outline: 'none',
+                boxSizing: 'border-box',
+                background: '#ffffff'
+              }}
+            />
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
+              <input
+                placeholder={cartCustomer.deliveryPartner === 'In-House Rider' ? 'Rider / Boy Name' : 'Order ID / Ref #'}
+                value={cartCustomer.riderName || ''}
+                onChange={e => setCartCustomer({ ...cartCustomer, riderName: e.target.value })}
+                style={{
+                  fontSize: '10px',
+                  padding: '5px 7px',
+                  border: '1px solid #cbd5e1',
+                  borderRadius: '4px',
+                  background: '#ffffff'
+                }}
+              />
+              <input
+                placeholder={cartCustomer.deliveryPartner === 'In-House Rider' ? 'Rider Phone' : 'Special Note'}
+                value={cartCustomer.riderPhone || ''}
+                onChange={e => setCartCustomer({ ...cartCustomer, riderPhone: e.target.value })}
+                style={{
+                  fontSize: '10px',
+                  padding: '5px 7px',
+                  border: '1px solid #cbd5e1',
+                  borderRadius: '4px',
+                  background: '#ffffff'
+                }}
+              />
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Cart Items List */}

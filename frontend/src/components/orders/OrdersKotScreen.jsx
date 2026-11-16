@@ -48,7 +48,16 @@ export default function OrdersKotScreen({
 
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <span className="kot-table">{o.tableCode}</span>
-                      <span className="badge-pill paid" style={{ fontSize: '9px' }}>{o.orderType}</span>
+                      <span
+                        className="badge-pill paid"
+                        style={{
+                          fontSize: '9px',
+                          background: o.orderType === 'Delivery' ? '#0284c7' : o.orderType === 'Takeaway' ? '#ea580c' : undefined,
+                          color: '#ffffff'
+                        }}
+                      >
+                        {o.orderType}
+                      </span>
                     </div>
 
                     <div className="kot-items-list">
@@ -61,8 +70,18 @@ export default function OrdersKotScreen({
                     </div>
 
                     {o.notes && (
-                      <div style={{ fontSize: '10px', color: '#854d0e', background: '#fef9c3', padding: '4px 6px', borderRadius: '4px' }}>
-                        Note: {o.notes}
+                      <div
+                        style={{
+                          fontSize: '10px',
+                          color: o.orderType === 'Delivery' ? '#0369a1' : '#854d0e',
+                          background: o.orderType === 'Delivery' ? '#f0f9ff' : '#fef9c3',
+                          border: o.orderType === 'Delivery' ? '1px solid #bae6fd' : 'none',
+                          padding: '5px 7px',
+                          borderRadius: '4px',
+                          lineHeight: 1.3
+                        }}
+                      >
+                        <b>{o.orderType === 'Delivery' ? '🛵 Delivery Info:' : 'Note:'}</b> {o.notes}
                       </div>
                     )}
 

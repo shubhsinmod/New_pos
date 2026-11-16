@@ -77,7 +77,15 @@ function App() {
   const [posSearch, setPosSearch] = useState('');
   const [cart, setCart] = useState([]);
   const [tableCarts, setTableCarts] = useState({}); // Per-table cart dictionary
-  const [cartCustomer, setCartCustomer] = useState({ name: '', phone: '' });
+  const [cartCustomer, setCartCustomer] = useState({
+    name: '',
+    phone: '',
+    address: '',
+    deliveryPartner: 'In-House Rider',
+    riderName: '',
+    riderPhone: '',
+    notes: ''
+  });
   const [tableCustomers, setTableCustomers] = useState({}); // Per-table customer dictionary
   const [discountPercent, setDiscountPercent] = useState(0);
 
@@ -309,7 +317,15 @@ function App() {
       setCartCustomer(custFromTable);
       setTableCustomers(prev => ({ ...prev, [tableCode]: custFromTable }));
     } else {
-      const blankCust = { name: '', phone: '' };
+      const blankCust = {
+        name: '',
+        phone: '',
+        address: '',
+        deliveryPartner: 'In-House Rider',
+        riderName: '',
+        riderPhone: '',
+        notes: ''
+      };
       setCartCustomer(blankCust);
       setTableCustomers(prev => ({ ...prev, [tableCode]: blankCust }));
     }
@@ -405,7 +421,15 @@ function App() {
 
       if (selectedTableId === tableCode) {
         setCart([]);
-        setCartCustomer({ name: '', phone: '' });
+        setCartCustomer({
+          name: '',
+          phone: '',
+          address: '',
+          deliveryPartner: 'In-House Rider',
+          riderName: '',
+          riderPhone: '',
+          notes: ''
+        });
       }
 
       // Mark any active orders for this table as Completed
@@ -513,7 +537,15 @@ function App() {
   function clearCart() {
     setCart([]);
     setDiscountPercent(0);
-    setCartCustomer({ name: '', phone: '' });
+    setCartCustomer({
+      name: '',
+      phone: '',
+      address: '',
+      deliveryPartner: 'In-House Rider',
+      riderName: '',
+      riderPhone: '',
+      notes: ''
+    });
     if (orderType === 'Dine-In' && selectedTableId) {
       setTableCarts(tc => {
         const next = { ...tc };
@@ -570,8 +602,21 @@ function App() {
     }
 
     const orderNumber = `KOT-${Math.floor(100 + Math.random() * 900)}`;
-    const tableCode = orderType === 'Dine-In' ? selectedTableId : `${orderType} #${Math.floor(10 + Math.random() * 89)}`;
     const isRunningOrder = cart.some(c => (c.kotSentQty || 0) > 0);
+    const isDelivery = orderType === 'Delivery';
+
+    let orderNotes = '';
+    if (isDelivery) {
+      orderNotes = `[DELIVERY: ${cartCustomer.deliveryPartner || 'In-House'}] Address: ${cartCustomer.address || 'Address pending'}${cartCustomer.riderName ? ` | Rider: ${cartCustomer.riderName}` : ''}${cartCustomer.riderPhone ? ` (${cartCustomer.riderPhone})` : ''}`;
+    } else {
+      orderNotes = (cartCustomer.name ? `Guest: ${cartCustomer.name} · ` : '') + (isRunningOrder ? 'Running Order (Add-on items only)' : 'Initial Order');
+    }
+
+    const tableCode = orderType === 'Dine-In'
+      ? selectedTableId
+      : isDelivery
+      ? `Delivery (${cartCustomer.deliveryPartner || 'Partner'})`
+      : `Takeaway #${Math.floor(10 + Math.random() * 89)}`;
 
     const orderPayload = {
       orderNumber,
@@ -583,9 +628,9 @@ function App() {
       discount: 0,
       tax: 0,
       total: itemsToFire.reduce((s, i) => s + (i.price * i.qty), 0),
-      customerName: cartCustomer.name || 'Walk-in',
+      customerName: cartCustomer.name || (isDelivery ? 'Delivery Customer' : 'Walk-in'),
       customerPhone: cartCustomer.phone || '',
-      notes: (cartCustomer.name ? `Guest: ${cartCustomer.name} · ` : '') + (isRunningOrder ? 'Running Order (Add-on items only)' : 'Initial Order')
+      notes: orderNotes
     };
 
     try {
@@ -659,13 +704,18 @@ function App() {
     const billNum = `BILL-${Math.floor(9000 + Math.random() * 1000)}`;
     const stlNum = `STL-${Math.floor(1000 + Math.random() * 9000)}`;
     const currentOutletId = selectedOutlet?.id || null;
+    const isDelivery = orderType === 'Delivery';
+    const deliveryAddress = cartCustomer.address || '';
+    const deliveryPartner = cartCustomer.deliveryPartner || 'In-House Rider';
+    const riderName = cartCustomer.riderName || '';
+    const riderPhone = cartCustomer.riderPhone || '';
 
     const settlementPayload = {
       settlementNumber: stlNum,
       billNumber: billNum,
-      tableCode: orderType === 'Dine-In' ? selectedTableId : orderType,
+      tableCode: orderType === 'Dine-In' ? selectedTableId : isDelivery ? `Delivery (${deliveryPartner})` : orderType,
       orderType,
-      customerName: cartCustomer.name || 'Walk-in Guest',
+      customerName: cartCustomer.name || (isDelivery ? 'Delivery Customer' : 'Walk-in Guest'),
       customerPhone: cartCustomer.phone || '',
       itemsJson: JSON.stringify(items),
       itemsCount: cart.reduce((a, b) => a + b.qty, 0),
@@ -774,6 +824,10 @@ function App() {
         orderType: savedSettlement.orderType,
         customerName: savedSettlement.customerName,
         customerPhone: savedSettlement.customerPhone,
+        deliveryAddress,
+        deliveryPartner,
+        riderName,
+        riderPhone,
         items,
         subtotal,
         discount: discountAmount,

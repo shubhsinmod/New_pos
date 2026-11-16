@@ -31,6 +31,11 @@ export default function ReceiptModal({
   const tax = activeReceipt.tax || 0;
   const halfTax = tax ? Math.round((tax / 2) * 100) / 100 : 0;
   const total = activeReceipt.total || activeReceipt.totalAmount || 0;
+  const isDelivery = activeReceipt.orderType === 'Delivery' || !!activeReceipt.deliveryAddress;
+  const deliveryPartner = activeReceipt.deliveryPartner || 'In-House Rider';
+  const deliveryAddress = activeReceipt.deliveryAddress || '';
+  const riderName = activeReceipt.riderName || '';
+  const riderPhone = activeReceipt.riderPhone || '';
 
   // Direct Thermal Printing for Posiflex PP8000 & 80mm printers via isolated iframe
   const handlePrint = () => {
@@ -162,6 +167,16 @@ export default function ReceiptModal({
               <span>Guest: ${guest}</span>
               <span>Mode: ${mode}</span>
             </div>
+            ${isDelivery ? `
+              <div style="border-top: 1px dashed #000; padding: 4px 0; margin-top: 4px; font-size: 10px;">
+                <div class="row" style="font-weight: bold; margin: 0 0 2px 0;">
+                  <span>TYPE: DELIVERY</span>
+                  <span>${deliveryPartner}</span>
+                </div>
+                ${deliveryAddress ? `<div style="margin: 2px 0;"><b>Address:</b> ${deliveryAddress}</div>` : ''}
+                ${riderName ? `<div style="margin: 2px 0;"><b>Rider:</b> ${riderName} ${riderPhone ? `(${riderPhone})` : ''}</div>` : ''}
+              </div>
+            ` : ''}
 
             <div class="table">
               <div class="table-header">
@@ -251,6 +266,25 @@ export default function ReceiptModal({
             <span>Guest: {guest}</span>
             <span>Mode: {mode}</span>
           </div>
+
+          {isDelivery && (
+            <div style={{ background: '#f0fdf4', border: '1px dashed #22c55e', padding: '6px 8px', borderRadius: '4px', margin: '6px 0', fontSize: '11px', textAlign: 'left' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, color: '#166534' }}>
+                <span>🛵 DELIVERY</span>
+                <span>{deliveryPartner}</span>
+              </div>
+              {deliveryAddress && (
+                <div style={{ color: '#1e293b', marginTop: '3px' }}>
+                  <strong>Address:</strong> {deliveryAddress}
+                </div>
+              )}
+              {riderName && (
+                <div style={{ color: '#475569', marginTop: '2px', fontSize: '10px' }}>
+                  <strong>Rider:</strong> {riderName} {riderPhone && `(${riderPhone})`}
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="receipt-items-table">
             <div className="receipt-row" style={{ fontWeight: 'bold', marginBottom: '4px' }}>
