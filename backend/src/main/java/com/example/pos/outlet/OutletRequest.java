@@ -11,5 +11,8 @@ public record OutletRequest(
     @Email @Size(max = 150) String email,
     String address,
     @Size(max = 15) String gstin,
-    Boolean active
+    Boolean active,
+    Long brandId,
+    String zomatoStoreId,
+    String swiggyStoreId
 ) {}

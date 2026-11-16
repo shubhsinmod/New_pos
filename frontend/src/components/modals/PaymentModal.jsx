@@ -105,7 +105,7 @@ export default function PaymentModal({
             className="primary-btn"
             onClick={handleCompletePayment}
           >
-            <Check size={16} /> Confirm Payment & Save to DB
+            <Check size={16} /> Confirm & Settle Payment
           </button>
         </div>
       </div>

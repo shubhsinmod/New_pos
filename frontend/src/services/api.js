@@ -20,6 +20,19 @@ export async function checkHealth() {
   return res.json();
 }
 
+// Brands (Central Brand Hierarchy)
+export async function getBrands() {
+  const res = await fetch(`${API_BASE}/api/brands`, { headers: getAuthHeaders() });
+  if (!res.ok) return [];
+  return res.json();
+}
+
+export async function getBrandAnalytics() {
+  const res = await fetch(`${API_BASE}/api/analytics/brand`, { headers: getAuthHeaders() });
+  if (!res.ok) return null;
+  return res.json();
+}
+
 // Outlets
 export async function getOutlets() {
   const res = await fetch(`${API_BASE}/api/outlets`, {
@@ -149,7 +162,7 @@ export async function createTable(payload) {
   return res.json();
 }
 
-// Orders (KOT)
+// Orders (Commercial / POS Orders)
 export async function getOrders(outletId) {
   const url = outletId ? `${API_BASE}/api/orders?outletId=${outletId}` : `${API_BASE}/api/orders`;
   const res = await fetch(url, {
@@ -177,6 +190,58 @@ export async function updateOrderStatus(orderId, status) {
   });
   if (!res.ok) throw new Error('Failed to update order status');
   return res.json();
+}
+
+// Dedicated Kitchen Orders (KOT Tickets Table)
+export async function getKitchenOrders(outletId, status) {
+  let url = `${API_BASE}/api/kitchen-orders`;
+  const params = [];
+  if (outletId) params.push(`outletId=${outletId}`);
+  if (status && status !== 'All') params.push(`status=${encodeURIComponent(status)}`);
+  if (params.length > 0) url += `?${params.join('&')}`;
+
+  const res = await fetch(url, { headers: getAuthHeaders() });
+  if (!res.ok) throw new Error('Failed to fetch kitchen orders from database');
+  return res.json();
+}
+
+export async function createKitchenOrder(payload) {
+  const res = await fetch(`${API_BASE}/api/kitchen-orders`, {
+    method: 'POST',
+    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(payload)
+  });
+  if (!res.ok) throw new Error('Failed to create kitchen order in database');
+  return res.json();
+}
+
+export async function updateKitchenOrderStatus(id, status, prepTimeMinutes) {
+  const res = await fetch(`${API_BASE}/api/kitchen-orders/${id}/status`, {
+    method: 'PUT',
+    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ status, prepTimeMinutes })
+  });
+  if (!res.ok) throw new Error('Failed to update kitchen order status');
+  return res.json();
+}
+
+export async function updateKitchenOrder(id, payload) {
+  const res = await fetch(`${API_BASE}/api/kitchen-orders/${id}`, {
+    method: 'PUT',
+    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(payload)
+  });
+  if (!res.ok) throw new Error('Failed to update kitchen order');
+  return res.json();
+}
+
+export async function deleteKitchenOrder(id) {
+  const res = await fetch(`${API_BASE}/api/kitchen-orders/${id}`, {
+    method: 'DELETE',
+    headers: getAuthHeaders()
+  });
+  if (!res.ok) throw new Error('Failed to delete kitchen order');
+  return true;
 }
 
 // Bills
@@ -217,6 +282,25 @@ export async function saveCustomer(payload) {
   });
   if (!res.ok) throw new Error('Failed to save customer');
   return res.json();
+}
+
+export async function updateCustomer(id, payload) {
+  const res = await fetch(`${API_BASE}/api/customers/${id}`, {
+    method: 'PUT',
+    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(payload)
+  });
+  if (!res.ok) throw new Error('Failed to update customer');
+  return res.json();
+}
+
+export async function deleteCustomer(id) {
+  const res = await fetch(`${API_BASE}/api/customers/${id}`, {
+    method: 'DELETE',
+    headers: getAuthHeaders()
+  });
+  if (!res.ok) throw new Error('Failed to delete customer');
+  return true;
 }
 
 // Analytics

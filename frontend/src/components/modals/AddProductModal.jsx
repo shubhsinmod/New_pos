@@ -44,11 +44,19 @@ export default function AddProductModal({
                 <span className="req">*</span>
               </div>
               <select
-                value={newProduct.category}
-                onChange={e => setNewProduct({ ...newProduct, category: e.target.value })}
+                value={newProduct.categoryId || (categories.find(c => c.name === newProduct.category)?.id) || ''}
+                onChange={e => {
+                  const catId = Number(e.target.value);
+                  const match = categories.find(c => c.id === catId);
+                  setNewProduct({
+                    ...newProduct,
+                    categoryId: catId,
+                    category: match ? match.name : newProduct.category
+                  });
+                }}
               >
                 {categories.map(c => (
-                  <option key={c.id} value={c.name}>{c.name}</option>
+                  <option key={c.id} value={c.id}>{c.name}</option>
                 ))}
               </select>
             </label>

@@ -9,6 +9,7 @@ export default function Topbar({
   loading,
   setNotice,
   outlets,
+  brands,
   selectedOutlet,
   setSelectedOutlet,
   apiStatus,
@@ -25,12 +26,34 @@ export default function Topbar({
         >
           <Menu size={19} />
         </button>
-        <span className="breadcrumb">Database</span>
+        <span className="breadcrumb">Tableflow POS</span>
         <span className="crumb-slash">/</span>
         <strong>{active}</strong>
       </div>
 
       <div className="topbar-actions">
+        {/* Central Brand Badge */}
+        {brands && brands.length > 0 && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '3px 10px',
+              background: '#ecfdf5',
+              border: '1px solid #a7f3d0',
+              borderRadius: '16px',
+              fontSize: '11px',
+              color: '#065f46',
+              fontWeight: 700
+            }}
+            title={`Brand: ${brands[0].name} (${brands[0].code})`}
+          >
+            <span>🏢</span>
+            <span>{brands[0].name}</span>
+          </div>
+        )}
+
         {/* Quick Refresh from DB */}
         <button
           className="icon-button"
@@ -51,13 +74,18 @@ export default function Topbar({
               className="pos-select-pill"
               value={selectedOutlet?.id || ''}
               onChange={e => {
-                const found = outlets.find(o => String(o.id) === e.target.value);
-                if (found) setSelectedOutlet(found);
+                if (e.target.value === 'ALL') {
+                  setSelectedOutlet({ id: 'ALL', name: 'All Outlets (Brand View)', code: 'ALL' });
+                } else {
+                  const found = outlets.find(o => String(o.id) === e.target.value);
+                  if (found) setSelectedOutlet(found);
+                }
               }}
-              title="Super Admin: Switch active outlet"
+              title="Super Admin: Switch active outlet or Brand View"
             >
+              <option value="ALL">🏢 All Outlets (Consolidated Brand View)</option>
               {outlets.map(o => (
-                <option key={o.id} value={o.id}>{o.name} ({o.code})</option>
+                <option key={o.id} value={o.id}>📍 {o.name} ({o.code})</option>
               ))}
             </select>
           ) : (

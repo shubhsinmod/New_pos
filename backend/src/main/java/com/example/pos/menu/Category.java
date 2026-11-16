@@ -3,7 +3,7 @@ package com.example.pos.menu;
 import jakarta.persistence.*;
 
 @Entity
-@Table(name = "categories")
+@Table(name = "item_categories")
 public class Category {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

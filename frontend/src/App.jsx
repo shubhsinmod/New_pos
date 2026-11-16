@@ -12,6 +12,7 @@ import OverviewScreen from './components/overview/OverviewScreen';
 import PosTerminal from './components/pos/PosTerminal';
 import TablesScreen from './components/tables/TablesScreen';
 import OrdersKotScreen from './components/orders/OrdersKotScreen';
+import OnlineDeliveryHub from './components/delivery/OnlineDeliveryHub';
 import MenuScreen from './components/menu/MenuScreen';
 import BillingScreen from './components/billing/BillingScreen';
 import CustomersScreen from './components/customers/CustomersScreen';
@@ -44,12 +45,15 @@ function App() {
   const [sidebarOpen, setSidebarOpen] = useState(typeof window !== 'undefined' ? window.innerWidth > 900 : true);
 
   // 100% DYNAMIC STATE LOADED FROM MSSQL DATABASE
+  const [brands, setBrands] = useState([]);
+  const [brandAnalytics, setBrandAnalytics] = useState(null);
   const [outlets, setOutlets] = useState([]);
   const [selectedOutlet, setSelectedOutlet] = useState(null);
   const [categories, setCategories] = useState([]);
   const [products, setProducts] = useState([]);
   const [tables, setTables] = useState([]);
   const [orders, setOrders] = useState([]);
+  const [kitchenOrders, setKitchenOrders] = useState([]);
   const [bills, setBills] = useState([]);
   const [settlements, setSettlements] = useState([]);
   const [customers, setCustomers] = useState([]);
@@ -67,7 +71,7 @@ function App() {
   // Outlets filter & form
   const [query, setQuery] = useState('');
   const [showModal, setShowModal] = useState(false);
-  const [form, setForm] = useState({ name: '', code: '', phone: '', email: '', address: '', gstin: '' });
+  const [form, setForm] = useState({ name: '', code: '', phone: '', email: '', address: '', gstin: '', zomatoStoreId: '', swiggyStoreId: '' });
 
   // POS State
   const [orderType, setOrderType] = useState('Dine-In');
@@ -100,24 +104,47 @@ function App() {
   const [showProductModal, setShowProductModal] = useState(false);
   const [newProduct, setNewProduct] = useState({ name: '', category: 'Main Course', price: '', isVeg: true, desc: '' });
 
-  // Fetch all data dynamically from MSSQL Database for the selected outlet
-  const fetchAllData = async (targetOutletId) => {
-    setLoading(true);
+  // Fetch all data dynamically from MSSQL Database for the selected outlet or Brand Consolidated view
+  const fetchAllData = async (targetOutletId, isSilent = false) => {
+    if (!isSilent) setLoading(true);
     try {
-      const outletsData = await api.getOutlets().catch(err => {
-        console.error('Error fetching outlets:', err);
-        return [];
-      });
+      const [outletsData, brandsData, brandAnalyticsData] = await Promise.all([
+        api.getOutlets().catch(err => {
+          console.error('Error fetching outlets:', err);
+          return [];
+        }),
+        api.getBrands().catch(err => {
+          console.error('Error fetching brands:', err);
+          return [];
+        }),
+        api.getBrandAnalytics().catch(err => {
+          console.error('Error fetching brand analytics:', err);
+          return null;
+        })
+      ]);
 
-      let activeOutletId = targetOutletId || selectedOutlet?.id;
+      if (Array.isArray(brandsData) && brandsData.length > 0) {
+        setBrands(brandsData);
+      }
+      if (brandAnalyticsData) {
+        setBrandAnalytics(brandAnalyticsData);
+      }
+
+      let activeOutletId = targetOutletId !== undefined ? targetOutletId : selectedOutlet?.id;
 
       if (Array.isArray(outletsData) && outletsData.length > 0) {
         setOutlets(outletsData);
-        const match = activeOutletId ? outletsData.find(o => o.id === activeOutletId) : null;
-        const activeToUse = match || outletsData[0];
-        setSelectedOutlet(activeToUse);
-        activeOutletId = activeToUse.id;
+        if (activeOutletId === 'ALL') {
+          setSelectedOutlet({ id: 'ALL', name: 'All Outlets (Brand View)', code: 'ALL' });
+        } else {
+          const match = activeOutletId ? outletsData.find(o => o.id === activeOutletId) : null;
+          const activeToUse = match || outletsData[0];
+          setSelectedOutlet(activeToUse);
+          activeOutletId = activeToUse.id;
+        }
       }
+
+      const queryOutletId = activeOutletId === 'ALL' ? null : activeOutletId;
 
       const [
         healthRes,
@@ -125,20 +152,22 @@ function App() {
         productsRes,
         tablesRes,
         ordersRes,
+        kitchenOrdersRes,
         billsRes,
         settlementsRes,
         customersRes,
         analyticsRes
       ] = await Promise.allSettled([
         api.checkHealth(),
-        api.getCategories(activeOutletId),
-        api.getProducts('All', activeOutletId),
-        api.getTables(activeOutletId),
-        api.getOrders(activeOutletId),
-        api.getBills(activeOutletId),
-        api.getSettlements(activeOutletId),
-        api.getCustomers(activeOutletId),
-        api.getAnalyticsSummary(activeOutletId),
+        api.getCategories(queryOutletId),
+        api.getProducts('All', queryOutletId),
+        api.getTables(queryOutletId),
+        api.getOrders(queryOutletId),
+        api.getKitchenOrders(queryOutletId),
+        api.getBills(queryOutletId),
+        api.getSettlements(queryOutletId),
+        api.getCustomers(queryOutletId),
+        api.getAnalyticsSummary(queryOutletId),
       ]);
 
       if (healthRes.status === 'fulfilled') {
@@ -177,6 +206,13 @@ function App() {
         setOrders(loadedOrders);
       }
 
+      if (kitchenOrdersRes.status === 'fulfilled' && Array.isArray(kitchenOrdersRes.value)) {
+        setKitchenOrders(kitchenOrdersRes.value.map(k => ({
+          ...k,
+          items: typeof k.itemsJson === 'string' ? JSON.parse(k.itemsJson || '[]') : (k.items || [])
+        })));
+      }
+
       if (billsRes.status === 'fulfilled' && Array.isArray(billsRes.value)) {
         setBills(billsRes.value.map(b => ({
           ...b,
@@ -198,7 +234,7 @@ function App() {
     } catch (err) {
       console.error('Error fetching data from database:', err);
     } finally {
-      setLoading(false);
+      if (!isSilent) setLoading(false);
     }
   };
 
@@ -218,6 +254,16 @@ function App() {
       fetchAllData();
     }
   }, []);
+
+  // Background silent real-time polling every 8s for live KOTs, Webhook orders, and tables
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible' && !showModal && !showProductModal && !showPayModal) {
+        fetchAllData(undefined, true);
+      }
+    }, 8000);
+    return () => clearInterval(timer);
+  }, [selectedOutlet?.id, showModal, showProductModal, showPayModal]);
 
   // Authentication Handlers
   const handleLoginSuccess = (user, token) => {
@@ -274,7 +320,7 @@ function App() {
       setNotice(err.message || 'Unable to create outlet.');
     }
     setShowModal(false);
-    setForm({ name: '', code: '', phone: '', email: '', address: '', gstin: '' });
+    setForm({ name: '', code: '', phone: '', email: '', address: '', gstin: '', zomatoStoreId: '', swiggyStoreId: '' });
   }
 
   // Categories list with 'All'
@@ -338,11 +384,26 @@ function App() {
       // Clean vacant table: NEVER load old completed orders
       setCart([]);
     } else {
-      // Table is Occupied or Billed: look up ONLY currently active kitchen orders (NOT Completed)
-      const activeOrder = orders.find(o => o.tableCode === tableCode && o.status !== 'Completed' && o.status !== 'Settled');
+      // Table is Occupied or Billed: look up ALL currently active kitchen orders (NOT Completed)
+      const activeOrders = orders.filter(o => o.tableCode === tableCode && o.status !== 'Completed' && o.status !== 'Settled');
 
-      if (activeOrder && Array.isArray(activeOrder.items) && activeOrder.items.length > 0) {
-        const hydratedItems = activeOrder.items.map(it => {
+      if (activeOrders.length > 0) {
+        // Collect and merge items across all active KOTs of this table
+        const mergedItemsMap = new Map();
+        for (const ord of activeOrders) {
+          const ordItems = Array.isArray(ord.items) ? ord.items : (typeof ord.itemsJson === 'string' ? JSON.parse(ord.itemsJson || '[]') : []);
+          for (const it of ordItems) {
+            const key = it.name.toLowerCase();
+            const existing = mergedItemsMap.get(key);
+            if (existing) {
+              existing.qty += it.qty;
+            } else {
+              mergedItemsMap.set(key, { ...it });
+            }
+          }
+        }
+
+        const hydratedItems = Array.from(mergedItemsMap.values()).map(it => {
           const matched = products.find(p => p.name.toLowerCase() === it.name.toLowerCase());
           const unitPrice = it.price || matched?.price || 150;
           return {
@@ -501,6 +562,12 @@ function App() {
 
   function updateCartQty(productId, delta) {
     setCart(prev => {
+      const target = prev.find(item => item.product.id === productId);
+      if (target && delta < 0 && target.qty <= (target.kotSentQty || 0)) {
+        setNotice(`"${target.product.name}" (${target.kotSentQty} sent to Kitchen) cannot be reduced below sent quantity.`);
+        return prev;
+      }
+
       const next = prev
         .map(item => {
           if (item.product.id === productId) {
@@ -520,6 +587,12 @@ function App() {
 
   function removeFromCart(productId) {
     setCart(prev => {
+      const target = prev.find(item => item.product.id === productId);
+      if (target && (target.kotSentQty || 0) > 0) {
+        setNotice(`Cannot remove "${target.product.name}" because ${target.kotSentQty} item(s) are already in preparation in the kitchen!`);
+        return prev;
+      }
+
       const next = prev.filter(item => item.product.id !== productId);
       if (orderType === 'Dine-In' && selectedTableId) {
         setTableCarts(tc => ({ ...tc, [selectedTableId]: next }));
@@ -639,6 +712,27 @@ function App() {
       const savedOrder = await api.createOrder(orderPayload);
       setOrders(prev => [{ ...savedOrder, items: itemsToFire }, ...prev]);
 
+      // Also create dedicated record in kitchen_orders table
+      try {
+        const kitchenKotPayload = {
+          kotNumber: orderNumber,
+          orderNumber: orderNumber,
+          orderId: savedOrder.id,
+          tableCode,
+          orderType,
+          status: 'In Kitchen',
+          itemsJson: JSON.stringify(itemsToFire),
+          notes: orderNotes,
+          station: 'Main Kitchen',
+          prepTimeMinutes: 15,
+          outletId: oid
+        };
+        const savedKitchenKot = await api.createKitchenOrder(kitchenKotPayload);
+        setKitchenOrders(prev => [{ ...savedKitchenKot, items: itemsToFire }, ...prev]);
+      } catch (kotErr) {
+        console.error('Error saving to kitchen_orders table:', kotErr);
+      }
+
       // Mark all current quantities as sent to kitchen!
       const updatedCart = cart.map(item => ({ ...item, kotSentQty: item.qty }));
       setCart(updatedCart);
@@ -682,9 +776,29 @@ function App() {
     try {
       await api.updateOrderStatus(orderId, newStatus);
       setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: newStatus } : o));
+      const targetOrder = orders.find(o => o.id === orderId);
+      const refNum = targetOrder?.orderNumber || targetOrder?.kotNumber;
+      if (refNum) {
+        setKitchenOrders(prev => prev.map(k => (k.orderNumber === refNum || k.kotNumber === refNum) ? { ...k, status: newStatus } : k));
+      }
       setNotice(`Order #${orderId} updated to "${newStatus}".`);
     } catch (err) {
       console.error('Error updating order:', err);
+    }
+  }
+
+  // Update Dedicated Kitchen Order Status (kitchen_orders table)
+  async function handleUpdateKitchenOrderStatus(kotId, newStatus, prepTimeMinutes) {
+    try {
+      const updated = await api.updateKitchenOrderStatus(kotId, newStatus, prepTimeMinutes);
+      setKitchenOrders(prev => prev.map(k => k.id === kotId ? { ...k, status: newStatus } : k));
+      const refNum = updated.kotNumber || updated.orderNumber;
+      if (refNum) {
+        setOrders(prev => prev.map(o => (o.orderNumber === refNum || o.kotNumber === refNum) ? { ...o, status: newStatus } : o));
+      }
+      setNotice(`Kitchen KOT #${updated.kotNumber || kotId} updated to "${newStatus}".`);
+    } catch (err) {
+      setNotice('Error updating kitchen order: ' + err.message);
     }
   }
 
@@ -726,9 +840,9 @@ function App() {
       tax: cgst + sgst,
       totalAmount: grandTotal,
       paymentMode: payMethod,
-      cashTendered: payMethod === 'Cash' ? (parseFloat(cashTendered) || grandTotal) : grandTotal,
-      changeReturned: payMethod === 'Cash' ? Math.max(0, (parseFloat(cashTendered) || grandTotal) - grandTotal) : 0,
-      paymentReference: payMethod === 'UPI' ? 'UPI-TXN-' + Date.now() : payMethod === 'Card' ? 'POS-CARD-' + Date.now() : 'CASH',
+      cashTendered: (payMethod && payMethod.toUpperCase() === 'CASH') ? (parseFloat(cashTendered) || grandTotal) : grandTotal,
+      changeReturned: (payMethod && payMethod.toUpperCase() === 'CASH') ? Math.max(0, (parseFloat(cashTendered) || grandTotal) - grandTotal) : 0,
+      paymentReference: payMethod === 'UPI' ? 'UPI-TXN-' + Date.now() : payMethod === 'CARD' ? 'POS-CARD-' + Date.now() : 'CASH',
       outletId: currentOutletId,
       outletName: selectedOutlet?.name || 'Tableflow POS',
       cashierName: currentUser?.fullName || currentUser?.username || 'Admin / Cashier',
@@ -737,13 +851,28 @@ function App() {
 
     try {
       // 1. Single atomic call to backend POST /api/settlements
-      // Backend automatically:
-      // - saves into `settlements` table
-      // - saves into `bills` table
-      // - updates customer loyalty points in `customers` table
-      // - resets `dining_tables` status to 'Available', 0.0 total, and clears customer name/phone
-      // - marks active kitchen tickets as 'Completed'
       const savedSettlement = await api.createSettlement(settlementPayload);
+
+      // Auto-fire kitchen ticket for any unsent items so kitchen has record of direct-paid order
+      const unsentItems = cart.filter(c => c.qty > (c.kotSentQty || 0));
+      if (unsentItems.length > 0) {
+        const autoKotNum = `KOT-${Math.floor(100 + Math.random() * 900)}`;
+        const autoKotPayload = {
+          kotNumber: autoKotNum,
+          orderNumber: autoKotNum,
+          tableCode: settlementPayload.tableCode,
+          orderType,
+          status: 'In Kitchen',
+          itemsJson: JSON.stringify(unsentItems.map(c => ({ name: c.product.name, qty: c.qty - (c.kotSentQty || 0), price: c.product.price }))),
+          notes: `Paid at Counter (${payMethod})`,
+          station: 'Main Kitchen',
+          prepTimeMinutes: 15,
+          outletId: currentOutletId || 1
+        };
+        api.createKitchenOrder(autoKotPayload).then(k => {
+          setKitchenOrders(prev => [{ ...k, items: unsentItems }, ...prev]);
+        }).catch(() => {});
+      }
 
       // 2. Update state locally
       setSettlements(prev => [savedSettlement, ...prev]);
@@ -788,6 +917,10 @@ function App() {
         });
 
         setOrders(prev => prev.map(o => o.tableCode === selectedTableId ? { ...o, status: 'Completed' } : o));
+        setKitchenOrders(prev => prev.map(k => k.tableCode === selectedTableId ? { ...k, status: 'Completed' } : k));
+      } else {
+        setOrders(prev => prev.map(o => (o.tableCode === settlementPayload.tableCode) ? { ...o, status: 'Completed' } : o));
+        setKitchenOrders(prev => prev.map(k => (k.tableCode === settlementPayload.tableCode) ? { ...k, status: 'Completed' } : k));
       }
 
       // Background sync with active outlet ID
@@ -795,6 +928,14 @@ function App() {
         api.getCustomers(currentOutletId).then(data => setCustomers(data)).catch(() => {});
         api.getAnalyticsSummary(currentOutletId).then(data => setAnalytics(data)).catch(() => {});
         api.getSettlements(currentOutletId).then(data => setSettlements(data)).catch(() => {});
+        api.getKitchenOrders(currentOutletId).then(data => {
+          if (Array.isArray(data)) {
+            setKitchenOrders(data.map(k => ({
+              ...k,
+              items: typeof k.itemsJson === 'string' ? JSON.parse(k.itemsJson || '[]') : (k.items || [])
+            })));
+          }
+        }).catch(() => {});
         api.getBills(currentOutletId).then(data => {
           if (Array.isArray(data)) {
             setBills(data.map(b => ({
@@ -836,6 +977,8 @@ function App() {
         tax: cgst + sgst,
         total: grandTotal,
         paymentMode: payMethod,
+        cashTendered: savedSettlement.cashTendered,
+        changeReturned: savedSettlement.changeReturned,
         outletName: selectedOutlet?.name,
         outletAddress: selectedOutlet?.address,
         gstin: selectedOutlet?.gstin
@@ -887,6 +1030,7 @@ function App() {
         setSidebarOpen={setSidebarOpen}
         selectedOutlet={selectedOutlet}
         orders={orders}
+        kitchenOrders={kitchenOrders}
         currentUser={currentUser}
         onLogout={handleLogout}
       />
@@ -902,6 +1046,7 @@ function App() {
           loading={loading}
           setNotice={setNotice}
           outlets={outlets}
+          brands={brands}
           selectedOutlet={selectedOutlet}
           setSelectedOutlet={handleSelectOutlet}
           apiStatus={apiStatus}
@@ -915,11 +1060,14 @@ function App() {
             <OverviewScreen
               setActive={setActive}
               selectedOutlet={selectedOutlet}
+              setSelectedOutlet={handleSelectOutlet}
               analytics={analytics}
               bills={bills}
               tables={tables}
               orders={orders}
               outlets={outlets}
+              brands={brands}
+              brandAnalytics={brandAnalytics}
               setSelectedTableId={setSelectedTableId}
               setOrderType={setOrderType}
               setActiveReceipt={setActiveReceipt}
@@ -987,8 +1135,29 @@ function App() {
           {active === 'Orders & KOT' && (
             <OrdersKotScreen
               orders={orders}
+              kitchenOrders={kitchenOrders}
+              setKitchenOrders={setKitchenOrders}
               setActive={setActive}
               handleUpdateOrderStatus={handleUpdateOrderStatus}
+              handleUpdateKitchenOrderStatus={handleUpdateKitchenOrderStatus}
+              selectedOutlet={selectedOutlet}
+              setNotice={setNotice}
+            />
+          )}
+
+          {active === 'Online Delivery' && (
+            <OnlineDeliveryHub
+              orders={orders}
+              setOrders={setOrders}
+              selectedOutlet={selectedOutlet}
+              setNotice={setNotice}
+              setActiveReceipt={setActiveReceipt}
+              setShowReceiptModal={setShowReceiptModal}
+              fetchAllData={fetchAllData}
+              onSwitchToManualCallOrder={() => {
+                setActive('POS Terminal');
+                setOrderType('Delivery');
+              }}
             />
           )}
 
@@ -1017,9 +1186,11 @@ function App() {
           {active === 'Customers' && (
             <CustomersScreen
               customers={customers}
+              setCustomers={setCustomers}
               setCartCustomer={setCartCustomer}
               setActive={setActive}
               setNotice={setNotice}
+              selectedOutlet={selectedOutlet}
             />
           )}
 
@@ -1034,6 +1205,7 @@ function App() {
               setSelectedOutlet={handleSelectOutlet}
               setOutlets={setOutlets}
               setNotice={setNotice}
+              brands={brands}
             />
           )}
 

@@ -11,9 +11,11 @@ import java.util.Map;
 @CrossOrigin(origins = "*")
 public class ProductController {
     private final ProductRepository repository;
+    private final CategoryRepository categoryRepository;
 
-    public ProductController(ProductRepository repository) {
+    public ProductController(ProductRepository repository, CategoryRepository categoryRepository) {
         this.repository = repository;
+        this.categoryRepository = categoryRepository;
     }
 
     @GetMapping
@@ -31,6 +33,18 @@ public class ProductController {
         if (product.getOutletId() == null) {
             product.setOutletId(1L);
         }
+
+        // Auto-link category_id and category name
+        if (product.getCategoryId() == null && product.getCategory() != null) {
+            categoryRepository.findForOutlet(product.getOutletId()).stream()
+                    .filter(c -> c.getName().equalsIgnoreCase(product.getCategory()))
+                    .findFirst()
+                    .ifPresent(c -> product.setCategoryId(c.getId()));
+        } else if (product.getCategoryId() != null && (product.getCategory() == null || product.getCategory().isBlank())) {
+            categoryRepository.findById(product.getCategoryId())
+                    .ifPresent(c -> product.setCategory(c.getName()));
+        }
+
         return repository.save(product);
     }
 

@@ -38,6 +38,9 @@ public class OnlineDeliveryOrder {
     @Column(name = "delivery_fee")
     private Double deliveryFee = 0.0;
 
+    @Column(name = "packaging_fee")
+    private Double packagingFee = 0.0;
+
     @Column(name = "total_amount", nullable = false)
     private Double totalAmount = 0.0;
 
@@ -113,6 +116,13 @@ public class OnlineDeliveryOrder {
 
     public Double getDeliveryFee() { return deliveryFee; }
     public void setDeliveryFee(Double deliveryFee) { this.deliveryFee = deliveryFee; }
+    public Double getDeliveryCharges() { return deliveryFee; }
+    public void setDeliveryCharges(Double deliveryCharges) { this.deliveryFee = deliveryCharges; }
+
+    public Double getPackagingFee() { return packagingFee; }
+    public void setPackagingFee(Double packagingFee) { this.packagingFee = packagingFee; }
+    public Double getPackagingCharges() { return packagingFee; }
+    public void setPackagingCharges(Double packagingCharges) { this.packagingFee = packagingCharges; }
 
     public Double getTotalAmount() { return totalAmount; }
     public void setTotalAmount(Double totalAmount) { this.totalAmount = totalAmount; }

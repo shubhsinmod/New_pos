@@ -33,6 +33,9 @@ public class OutletService {
         outlet.setAddress(blankToNull(request.address()));
         outlet.setGstin(blankToNull(request.gstin()));
         outlet.setActive(request.active() == null || request.active());
+        outlet.setBrandId(request.brandId() != null ? request.brandId() : 1L);
+        outlet.setZomatoStoreId(blankToNull(request.zomatoStoreId()));
+        outlet.setSwiggyStoreId(blankToNull(request.swiggyStoreId()));
         return repository.save(outlet);
     }
 
@@ -55,6 +58,11 @@ public class OutletService {
         if (request.active() != null) {
             outlet.setActive(request.active());
         }
+        if (request.brandId() != null) {
+            outlet.setBrandId(request.brandId());
+        }
+        outlet.setZomatoStoreId(blankToNull(request.zomatoStoreId()));
+        outlet.setSwiggyStoreId(blankToNull(request.swiggyStoreId()));
         return repository.save(outlet);
     }
 

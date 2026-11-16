@@ -2,6 +2,8 @@ package com.example.pos.analytics;
 
 import com.example.pos.billing.Bill;
 import com.example.pos.billing.BillRepository;
+import com.example.pos.outlet.Outlet;
+import com.example.pos.outlet.OutletRepository;
 import com.example.pos.table.DiningTable;
 import com.example.pos.table.DiningTableRepository;
 import org.springframework.web.bind.annotation.CrossOrigin;
@@ -10,6 +12,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -21,10 +24,12 @@ public class AnalyticsController {
 
     private final BillRepository billRepo;
     private final DiningTableRepository tableRepo;
+    private final OutletRepository outletRepo;
 
-    public AnalyticsController(BillRepository billRepo, DiningTableRepository tableRepo) {
+    public AnalyticsController(BillRepository billRepo, DiningTableRepository tableRepo, OutletRepository outletRepo) {
         this.billRepo = billRepo;
         this.tableRepo = tableRepo;
+        this.outletRepo = outletRepo;
     }
 
     @GetMapping("/summary")
@@ -56,5 +61,45 @@ public class AnalyticsController {
         summary.put("averageOrderValue", bills.isEmpty() ? 0.0 : Math.round(totalRevenue / bills.size()));
 
         return summary;
+    }
+
+    @GetMapping("/brand")
+    public Map<String, Object> getBrandConsolidated() {
+        List<Outlet> outlets = outletRepo.findAll();
+        List<Bill> allBills = billRepo.findAll();
+        List<DiningTable> allTables = tableRepo.findAll();
+
+        double brandRevenue = allBills.stream().mapToDouble(b -> b.getTotal() != null ? b.getTotal() : 0.0).sum();
+
+        List<Map<String, Object>> outletMetrics = new ArrayList<>();
+        for (Outlet o : outlets) {
+            List<Bill> oBills = billRepo.findByOutletIdOrderByIdDesc(o.getId());
+            List<DiningTable> oTables = tableRepo.findByOutletIdOrderByIdAsc(o.getId());
+
+            double oRev = oBills.stream().mapToDouble(b -> b.getTotal() != null ? b.getTotal() : 0.0).sum();
+            long occ = oTables.stream().filter(t -> !"Available".equalsIgnoreCase(t.getStatus())).count();
+
+            Map<String, Object> om = new HashMap<>();
+            om.put("outletId", o.getId());
+            om.put("outletName", o.getName());
+            om.put("outletCode", o.getCode());
+            om.put("zomatoStoreId", o.getZomatoStoreId());
+            om.put("swiggyStoreId", o.getSwiggyStoreId());
+            om.put("revenue", oRev);
+            om.put("billsCount", oBills.size());
+            om.put("totalTables", oTables.size());
+            om.put("occupiedTables", occ);
+            outletMetrics.add(om);
+        }
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("brandName", "Tableflow Gourmet Foods");
+        result.put("brandCode", "TGF");
+        result.put("totalOutlets", outlets.size());
+        result.put("totalBrandRevenue", brandRevenue);
+        result.put("totalBills", allBills.size());
+        result.put("outletsBreakdown", outletMetrics);
+
+        return result;
     }
 }

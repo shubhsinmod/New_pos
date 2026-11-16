@@ -28,6 +28,15 @@ public class Outlet {
     @Column(length = 15)
     private String gstin;
 
+    @Column(name = "brand_id")
+    private Long brandId = 1L;
+
+    @Column(name = "zomato_store_id", length = 50)
+    private String zomatoStoreId;
+
+    @Column(name = "swiggy_store_id", length = 50)
+    private String swiggyStoreId;
+
     @Column(name = "is_active", nullable = false)
     private boolean active = true;
 
@@ -62,6 +71,12 @@ public class Outlet {
     public void setAddress(String address) { this.address = address; }
     public String getGstin() { return gstin; }
     public void setGstin(String gstin) { this.gstin = gstin; }
+    public Long getBrandId() { return brandId; }
+    public void setBrandId(Long brandId) { this.brandId = brandId; }
+    public String getZomatoStoreId() { return zomatoStoreId; }
+    public void setZomatoStoreId(String zomatoStoreId) { this.zomatoStoreId = zomatoStoreId; }
+    public String getSwiggyStoreId() { return swiggyStoreId; }
+    public void setSwiggyStoreId(String swiggyStoreId) { this.swiggyStoreId = swiggyStoreId; }
     public boolean isActive() { return active; }
     public void setActive(boolean active) { this.active = active; }
     public OffsetDateTime getCreatedAt() { return createdAt; }

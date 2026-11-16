@@ -2,6 +2,13 @@ package com.example.pos.user;
 
 import com.example.pos.security.JwtUtil;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.DisabledException;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
@@ -13,11 +20,18 @@ import java.util.*;
 @RequestMapping("/api/auth")
 @CrossOrigin(origins = "*")
 public class AuthController {
+    private final AuthenticationManager authenticationManager;
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
 
-    public AuthController(UserRepository userRepository, PasswordEncoder passwordEncoder, JwtUtil jwtUtil) {
+    public AuthController(
+            AuthenticationManager authenticationManager,
+            UserRepository userRepository,
+            PasswordEncoder passwordEncoder,
+            JwtUtil jwtUtil
+    ) {
+        this.authenticationManager = authenticationManager;
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtUtil = jwtUtil;
@@ -32,17 +46,22 @@ public class AuthController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Username and password are required.");
         }
 
-        User user = userRepository.findByUsername(username.trim().toLowerCase())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid username or password."));
-
-        if (!Boolean.TRUE.equals(user.getActive())) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "User account is deactivated. Please contact admin.");
-        }
-
-        // Verify password with BCrypt
-        if (!passwordEncoder.matches(password, user.getPassword())) {
+        try {
+            // Spring Security AuthenticationManager validation
+            Authentication authentication = authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(username.trim().toLowerCase(), password)
+            );
+            SecurityContextHolder.getContext().setAuthentication(authentication);
+        } catch (BadCredentialsException ex) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid username or password.");
+        } catch (DisabledException ex) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "User account is deactivated. Please contact admin.");
+        } catch (AuthenticationException ex) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authentication failed: " + ex.getMessage());
         }
+
+        User user = userRepository.findByUsername(username.trim().toLowerCase())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User not found."));
 
         String token = jwtUtil.generateToken(user);
         Map<String, Object> response = new HashMap<>();

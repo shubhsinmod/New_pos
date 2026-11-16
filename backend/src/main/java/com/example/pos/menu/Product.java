@@ -5,7 +5,7 @@ import jakarta.persistence.*;
 import java.time.OffsetDateTime;
 
 @Entity
-@Table(name = "products")
+@Table(name = "items")
 public class Product {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -14,8 +14,14 @@ public class Product {
     @Column(nullable = false, length = 150)
     private String name;
 
+    @Column(name = "category_id")
+    private Long categoryId;
+
     @Column(nullable = false, length = 100)
     private String category;
+
+    @Column(name = "category_name", length = 100)
+    private String categoryName;
 
     @Column(nullable = false)
     private Double price;
@@ -39,6 +45,12 @@ public class Product {
     @PrePersist
     void onCreate() {
         if (createdAt == null) createdAt = OffsetDateTime.now();
+        if (categoryName == null) categoryName = category;
+    }
+
+    @PreUpdate
+    void onUpdate() {
+        if (categoryName == null) categoryName = category;
     }
 
     public Product() {}
@@ -55,8 +67,15 @@ public class Product {
     public Long getId() { return id; }
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }
+    public Long getCategoryId() { return categoryId; }
+    public void setCategoryId(Long categoryId) { this.categoryId = categoryId; }
     public String getCategory() { return category; }
-    public void setCategory(String category) { this.category = category; }
+    public void setCategory(String category) {
+        this.category = category;
+        this.categoryName = category;
+    }
+    public String getCategoryName() { return categoryName; }
+    public void setCategoryName(String categoryName) { this.categoryName = categoryName; }
     public Double getPrice() { return price; }
     public void setPrice(Double price) { this.price = price; }
 

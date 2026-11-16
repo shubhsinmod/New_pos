@@ -148,7 +148,7 @@ export default function BillingScreen({
         /* Bills / Tax Invoices Table */
         <div className="data-table-card">
           <div style={{ padding: '12px 16px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', fontSize: '12px', color: '#64748b' }}>
-            Tax invoices recorded in MSSQL database for this outlet.
+            Tax invoices recorded for this outlet.
           </div>
           <table className="data-table">
             <thead>

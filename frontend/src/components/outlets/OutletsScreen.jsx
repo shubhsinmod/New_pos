@@ -11,7 +11,8 @@ export default function OutletsScreen({
   selectedOutlet,
   setSelectedOutlet,
   setOutlets,
-  setNotice
+  setNotice,
+  brands
 }) {
   const [editingOutlet, setEditingOutlet] = useState(null);
   const [editForm, setEditForm] = useState({
@@ -21,7 +22,9 @@ export default function OutletsScreen({
     email: '',
     address: '',
     gstin: '',
-    active: true
+    active: true,
+    zomatoStoreId: '',
+    swiggyStoreId: ''
   });
   const [saving, setSaving] = useState(false);
   const [togglingId, setTogglingId] = useState(null);
@@ -36,7 +39,9 @@ export default function OutletsScreen({
       email: outlet.email || '',
       address: outlet.address || '',
       gstin: outlet.gstin || '',
-      active: outlet.active !== false
+      active: outlet.active !== false,
+      zomatoStoreId: outlet.zomatoStoreId || '',
+      swiggyStoreId: outlet.swiggyStoreId || ''
     });
   };
 
@@ -53,7 +58,9 @@ export default function OutletsScreen({
         email: editForm.email?.trim() || null,
         address: editForm.address?.trim() || null,
         gstin: editForm.gstin?.trim() || null,
-        active: editForm.active
+        active: editForm.active,
+        zomatoStoreId: editForm.zomatoStoreId?.trim() || null,
+        swiggyStoreId: editForm.swiggyStoreId?.trim() || null
       };
       const updated = await api.updateOutlet(editingOutlet.id, payload);
 
@@ -110,6 +117,40 @@ export default function OutletsScreen({
           <Plus size={17} /> Add outlet
         </button>
       </div>
+
+      {/* Central Brand Holding Banner */}
+      {brands && brands.length > 0 && (
+        <div style={{
+          background: 'linear-gradient(135deg, #093729 0%, #176b52 100%)',
+          color: '#ffffff',
+          padding: '16px 22px',
+          borderRadius: '12px',
+          marginBottom: '20px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: '12px',
+          boxShadow: '0 4px 16px rgba(23, 107, 82, 0.2)'
+        }}>
+          <div>
+            <div style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#86efac', fontWeight: 800 }}>
+              🏢 CENTRAL BRAND HOLDING
+            </div>
+            <h2 style={{ margin: '4px 0 2px 0', fontSize: '20px', fontWeight: 800, color: '#ffffff' }}>
+              {brands[0].name} ({brands[0].code})
+            </h2>
+            <p style={{ margin: 0, fontSize: '12px', color: '#d1fae5' }}>
+              Corporate Email: <strong>{brands[0].corporateEmail || 'contact@tableflow.com'}</strong> · Phone: <strong>{brands[0].corporatePhone || '+91 80 4455 6677'}</strong> · {outlets.length} Outlets Linked
+            </p>
+          </div>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <span style={{ padding: '6px 14px', background: 'rgba(255,255,255,0.18)', borderRadius: '20px', fontSize: '11px', fontWeight: 700, border: '1px solid rgba(255,255,255,0.3)' }}>
+              ✓ Central Brand Active
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* Metrics Bar */}
       <div className="stats-grid" style={{ marginBottom: '20px' }}>
@@ -241,6 +282,44 @@ export default function OutletsScreen({
               </div>
 
               <div className="location-code">{o.code}</div>
+
+              {/* Online Aggregator Store IDs */}
+              <div style={{ display: 'flex', gap: '6px', margin: '6px 0 10px 0', flexWrap: 'wrap' }}>
+                <span
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    padding: '2px 8px',
+                    background: '#fef2f2',
+                    border: '1px solid #fecaca',
+                    borderRadius: '6px',
+                    fontSize: '10px',
+                    color: '#dc2626',
+                    fontWeight: 600
+                  }}
+                  title="Zomato Webhook Store Mapping"
+                >
+                  <strong style={{ fontWeight: 800 }}>Zomato:</strong> {o.zomatoStoreId || 'Not set'}
+                </span>
+                <span
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    padding: '2px 8px',
+                    background: '#fff7ed',
+                    border: '1px solid #fed7aa',
+                    borderRadius: '6px',
+                    fontSize: '10px',
+                    color: '#ea580c',
+                    fontWeight: 600
+                  }}
+                  title="Swiggy Webhook Store Mapping"
+                >
+                  <strong style={{ fontWeight: 800 }}>Swiggy:</strong> {o.swiggyStoreId || 'Not set'}
+                </span>
+              </div>
 
               <div className="location-details">
                 <div>
@@ -404,6 +483,33 @@ export default function OutletsScreen({
                   onChange={e => setEditForm({ ...editForm, gstin: e.target.value.toUpperCase() })}
                 />
               </label>
+
+              <div className="form-two">
+                <label>
+                  <div className="label-text">
+                    <span>Zomato Store ID</span>
+                    <span className="optional">OPTIONAL</span>
+                  </div>
+                  <input
+                    maxLength="50"
+                    placeholder="e.g. ZOM-BLR-01"
+                    value={editForm.zomatoStoreId || ''}
+                    onChange={e => setEditForm({ ...editForm, zomatoStoreId: e.target.value })}
+                  />
+                </label>
+                <label>
+                  <div className="label-text">
+                    <span>Swiggy Store ID</span>
+                    <span className="optional">OPTIONAL</span>
+                  </div>
+                  <input
+                    maxLength="50"
+                    placeholder="e.g. SWG-BLR-01"
+                    value={editForm.swiggyStoreId || ''}
+                    onChange={e => setEditForm({ ...editForm, swiggyStoreId: e.target.value })}
+                  />
+                </label>
+              </div>
 
               <label className="inline-label" style={{ padding: '10px 12px', background: editForm.active ? '#ecfdf5' : '#f8fafc', border: `1.5px solid ${editForm.active ? '#86efac' : '#cbd5e1'}`, borderRadius: '8px' }}>
                 <input

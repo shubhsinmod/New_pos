@@ -4,6 +4,8 @@ import com.example.pos.billing.Bill;
 import com.example.pos.billing.BillRepository;
 import com.example.pos.customer.Customer;
 import com.example.pos.customer.CustomerRepository;
+import com.example.pos.kitchen.KitchenOrder;
+import com.example.pos.kitchen.KitchenOrderRepository;
 import com.example.pos.order.RestaurantOrder;
 import com.example.pos.order.RestaurantOrderRepository;
 import com.example.pos.outlet.OutletRepository;
@@ -14,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -25,6 +28,7 @@ public class SettlementController {
     private final BillRepository billRepository;
     private final DiningTableRepository tableRepository;
     private final RestaurantOrderRepository orderRepository;
+    private final KitchenOrderRepository kitchenOrderRepository;
     private final CustomerRepository customerRepository;
     private final OutletRepository outletRepository;
 
@@ -33,6 +37,7 @@ public class SettlementController {
             BillRepository billRepository,
             DiningTableRepository tableRepository,
             RestaurantOrderRepository orderRepository,
+            KitchenOrderRepository kitchenOrderRepository,
             CustomerRepository customerRepository,
             OutletRepository outletRepository
     ) {
@@ -40,6 +45,7 @@ public class SettlementController {
         this.billRepository = billRepository;
         this.tableRepository = tableRepository;
         this.orderRepository = orderRepository;
+        this.kitchenOrderRepository = kitchenOrderRepository;
         this.customerRepository = customerRepository;
         this.outletRepository = outletRepository;
     }
@@ -52,9 +58,15 @@ public class SettlementController {
         return settlementRepository.findAllByOrderBySettledAtDesc();
     }
 
-    @GetMapping("/table/{tableCode}")
-    public List<Settlement> findByTableCode(@PathVariable String tableCode) {
-        return settlementRepository.findByTableCodeOrderBySettledAtDesc(tableCode);
+    @GetMapping("/{id}")
+    public Settlement findById(@PathVariable Long id) {
+        return settlementRepository.findById(id).orElse(null);
+    }
+
+    @GetMapping("/latest")
+    public Settlement findLatest(@RequestParam(required = false) Long outletId) {
+        List<Settlement> list = findAll(outletId);
+        return list.isEmpty() ? null : list.get(0);
     }
 
     @PostMapping
@@ -104,13 +116,18 @@ public class SettlementController {
         bill.setOutletName(request.getOutletName() != null ? request.getOutletName() : "Tableflow POS");
         billRepository.save(bill);
 
-        // 4. Update Customer in MSSQL CRM if phone is provided
-        if (request.getCustomerPhone() != null && !request.getCustomerPhone().isBlank()) {
-            Optional<Customer> existingCustomer = customerRepository.findByPhone(request.getCustomerPhone());
+        // 4. Update Customer in MSSQL CRM if phone or name is provided
+        String cPhone = request.getCustomerPhone() != null ? request.getCustomerPhone().trim() : "";
+        String cName = request.getCustomerName() != null ? request.getCustomerName().trim() : "";
+        if (!cPhone.isBlank() || (!cName.isBlank() && !"Walk-in Guest".equalsIgnoreCase(cName))) {
+            Optional<Customer> existingCustomer = !cPhone.isBlank()
+                    ? customerRepository.findByPhone(cPhone)
+                    : customerRepository.findByNameIgnoreCase(cName);
+
             Customer customer = existingCustomer.orElseGet(() -> {
                 Customer c = new Customer();
-                c.setPhone(request.getCustomerPhone());
-                c.setName(request.getCustomerName() != null ? request.getCustomerName() : "Guest");
+                c.setPhone(!cPhone.isBlank() ? cPhone : null);
+                c.setName(!cName.isBlank() ? cName : "Customer " + cPhone);
                 c.setOutletId(request.getOutletId());
                 c.setVisits(0);
                 c.setTotalSpent(0.0);
@@ -120,10 +137,16 @@ public class SettlementController {
             if (customer.getOutletId() == null) {
                 customer.setOutletId(request.getOutletId());
             }
+            if (!cName.isBlank() && (customer.getName() == null || customer.getName().startsWith("Customer "))) {
+                customer.setName(cName);
+            }
+            if (!cPhone.isBlank() && customer.getPhone() == null) {
+                customer.setPhone(cPhone);
+            }
             customer.setVisits(customer.getVisits() + 1);
             customer.setTotalSpent(customer.getTotalSpent() + request.getTotalAmount());
             customer.setLoyaltyPoints(customer.getLoyaltyPoints() + (int) (request.getTotalAmount() / 10));
-            customer.setLastVisitAt(java.time.OffsetDateTime.now());
+            customer.setLastVisitAt(OffsetDateTime.now());
             customerRepository.save(customer);
         }
 
@@ -140,13 +163,26 @@ public class SettlementController {
                 table.setCustomerPhone(null);
                 tableRepository.save(table);
             }
+        }
 
-            // 6. Complete all active kitchen orders for this table
+        // 6. Complete all active orders in restaurant_orders for this table or order
+        if (request.getTableCode() != null) {
             List<RestaurantOrder> orders = orderRepository.findByTableCodeOrderByIdDesc(request.getTableCode());
             for (RestaurantOrder ord : orders) {
                 if (!"Completed".equalsIgnoreCase(ord.getStatus())) {
                     ord.setStatus("Completed");
                     orderRepository.save(ord);
+                }
+            }
+
+            // 7. Complete all active kitchen KOTs in kitchen_orders table for this table
+            Long queryOutlet = request.getOutletId() != null ? request.getOutletId() : 1L;
+            List<KitchenOrder> kots = kitchenOrderRepository.findByOutletIdOrderByIdDesc(queryOutlet);
+            for (KitchenOrder ko : kots) {
+                if (request.getTableCode().equalsIgnoreCase(ko.getTableCode()) && !"Completed".equalsIgnoreCase(ko.getStatus())) {
+                    ko.setStatus("Completed");
+                    ko.setUpdatedAt(OffsetDateTime.now());
+                    kitchenOrderRepository.save(ko);
                 }
             }
         }

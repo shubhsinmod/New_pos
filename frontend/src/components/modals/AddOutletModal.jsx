@@ -79,6 +79,33 @@ export default function AddOutletModal({
             </label>
           </div>
 
+          <div className="form-two">
+            <label>
+              <div className="label-text">
+                <span>Zomato Store ID</span>
+                <span className="optional">OPTIONAL</span>
+              </div>
+              <input
+                maxLength="50"
+                placeholder="e.g. ZOM-HYD-01"
+                value={form.zomatoStoreId || ''}
+                onChange={e => setForm({ ...form, zomatoStoreId: e.target.value })}
+              />
+            </label>
+            <label>
+              <div className="label-text">
+                <span>Swiggy Store ID</span>
+                <span className="optional">OPTIONAL</span>
+              </div>
+              <input
+                maxLength="50"
+                placeholder="e.g. SWG-HYD-01"
+                value={form.swiggyStoreId || ''}
+                onChange={e => setForm({ ...form, swiggyStoreId: e.target.value })}
+              />
+            </label>
+          </div>
+
           <label>
             <div className="label-text">
               <span>Address</span>

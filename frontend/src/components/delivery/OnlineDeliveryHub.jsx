@@ -18,7 +18,7 @@ import {
   ShoppingBag,
   Edit2,
   Save,
-  Database
+  Radio
 } from 'lucide-react';
 import * as api from '../../services/api';
 
@@ -47,6 +47,7 @@ export default function OnlineDeliveryHub({
   setNotice,
   setActiveReceipt,
   setShowReceiptModal,
+  fetchAllData,
   onSwitchToManualCallOrder
 }) {
   const [onlineTab, setOnlineTab] = useState('New'); // 'New' | 'In Kitchen' | 'Ready' | 'Completed' | 'All'
@@ -112,19 +113,19 @@ export default function OnlineDeliveryHub({
       }
 
       if (soundEnabled) playDingSound();
-      setNotice(`✅ ${order.platform} Order #${order.orderNumber} Accepted in DB! KOT dispatched to Kitchen (${prepTimeMinutes}m prep).`);
+      setNotice(`✅ ${order.platform} Order #${order.orderNumber} Accepted! KOT dispatched to Kitchen (${prepTimeMinutes}m prep).`);
       setOnlineTab('In Kitchen');
     } catch (err) {
-      setNotice('Error accepting order in database: ' + err.message);
+      setNotice('Error accepting order: ' + err.message);
     }
   };
 
-  // Reject Online Order -> Updates status in database
+  // Reject Online Order
   const handleRejectOnlineOrder = async (orderId, platform) => {
     try {
       const updated = await api.updateDeliveryOrderStatus(orderId, 'Rejected');
       setDbOrders(prev => prev.map(o => o.id === orderId ? updated : o));
-      setNotice(`❌ ${platform} Order rejected in database.`);
+      setNotice(`❌ ${platform} Order rejected.`);
     } catch (err) {
       setNotice('Error rejecting order: ' + err.message);
     }
@@ -136,24 +137,26 @@ export default function OnlineDeliveryHub({
       const updated = await api.updateDeliveryOrderStatus(order.id, 'Ready for Pickup');
       setDbOrders(prev => prev.map(o => o.id === order.id ? updated : o));
       if (soundEnabled) playDingSound();
-      setNotice(`🛵 Order #${order.orderNumber} marked Ready for Rider in DB!`);
-    } catch (err) {
-      setNotice('Error updating status in database: ' + err.message);
-    }
-  };
-
-  // Mark Handed Over / Completed in database
-  const handleMarkCompleted = async (order) => {
-    try {
-      const updated = await api.updateDeliveryOrderStatus(order.id, 'Completed');
-      setDbOrders(prev => prev.map(o => o.id === order.id ? updated : o));
-      setNotice(`✓ Order #${order.orderNumber} handed over to Rider & Completed in DB.`);
+      setNotice(`🛵 Order #${order.orderNumber} marked Ready for Rider!`);
+      if (fetchAllData) fetchAllData(undefined, true);
     } catch (err) {
       setNotice('Error updating status: ' + err.message);
     }
   };
 
-  // Open Edit Modal for checking and modifying any delivery order in DB
+  // Mark Handed Over / Completed
+  const handleMarkCompleted = async (order) => {
+    try {
+      const updated = await api.updateDeliveryOrderStatus(order.id, 'Completed');
+      setDbOrders(prev => prev.map(o => o.id === order.id ? updated : o));
+      setNotice(`✓ Order #${order.orderNumber} handed over to Rider & Completed.`);
+      if (fetchAllData) fetchAllData(undefined, true);
+    } catch (err) {
+      setNotice('Error updating status: ' + err.message);
+    }
+  };
+
+  // Open Edit Modal for checking and modifying any delivery order
   const handleOpenEdit = (order) => {
     setEditingOrder(order);
     setEditForm({
@@ -169,26 +172,26 @@ export default function OnlineDeliveryHub({
     });
   };
 
-  // Save modified order details to MSSQL database
+  // Save modified order details
   const handleSaveEdit = async () => {
     if (!editingOrder) return;
     try {
       const updated = await api.updateDeliveryOrder(editingOrder.id, editForm);
       setDbOrders(prev => prev.map(o => o.id === editingOrder.id ? updated : o));
-      setNotice(`✅ Order #${editingOrder.orderNumber} modified & saved to MSSQL database!`);
+      setNotice(`✅ Order #${editingOrder.orderNumber} updated successfully!`);
       setEditingOrder(null);
     } catch (err) {
       setNotice('Error saving order modifications: ' + err.message);
     }
   };
 
-  // Delete an order from database
+  // Delete an order
   const handleDeleteOrder = async (orderId, orderNum) => {
-    if (!window.confirm(`Are you sure you want to delete order #${orderNum} from database?`)) return;
+    if (!window.confirm(`Are you sure you want to delete order #${orderNum}?`)) return;
     try {
       await api.deleteDeliveryOrder(orderId);
       setDbOrders(prev => prev.filter(o => o.id !== orderId));
-      setNotice(`Order #${orderNum} deleted from database.`);
+      setNotice(`Order #${orderNum} deleted.`);
     } catch (err) {
       setNotice('Error deleting order: ' + err.message);
     }
@@ -281,14 +284,14 @@ export default function OnlineDeliveryHub({
       const created = await api.createDeliveryOrder(payload);
       setDbOrders(prev => [created, ...prev]);
       if (soundEnabled) playDingSound();
-      setNotice(`🔔 Real DB Entry Created! New ${platform} Order #${created.orderNumber} saved to MSSQL.`);
+      setNotice(`🔔 New ${platform} Order #${created.orderNumber} received!`);
       setOnlineTab('New');
 
       if (autoAccept) {
         handleAcceptOnlineOrder(created, 15);
       }
     } catch (err) {
-      setNotice('Error inserting online order into database: ' + err.message);
+      setNotice('Error placing online order: ' + err.message);
     }
   };
 
@@ -311,8 +314,8 @@ export default function OnlineDeliveryHub({
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <Database size={15} color="#176b52" />
-            <span style={{ fontSize: '13px', fontWeight: 800, color: '#0f172a' }}>DB: online_delivery_orders</span>
+            <Radio size={15} color="#176b52" />
+            <span style={{ fontSize: '13px', fontWeight: 800, color: '#0f172a' }}>Online Delivery Channels</span>
           </div>
 
           {/* Zomato Pill */}
@@ -349,7 +352,7 @@ export default function OnlineDeliveryHub({
             🟠 SWIGGY <span style={{ fontSize: '9px', color: '#16a34a', background: '#dcfce7', padding: '1px 5px', borderRadius: '10px' }}>Active API</span>
           </div>
 
-          {/* Refresh DB button */}
+          {/* Refresh button */}
           <button
             onClick={loadDeliveryOrders}
             disabled={loading}
@@ -366,9 +369,9 @@ export default function OnlineDeliveryHub({
               color: '#475569',
               cursor: 'pointer'
             }}
-            title="Reload live orders from MSSQL database"
+            title="Reload live orders"
           >
-            <RefreshCw size={11} className={loading ? 'spin' : ''} /> Refresh DB
+            <RefreshCw size={11} className={loading ? 'spin' : ''} /> Refresh
           </button>
         </div>
 
@@ -434,7 +437,7 @@ export default function OnlineDeliveryHub({
               cursor: 'pointer'
             }}
           >
-            + New Zomato DB Order
+            + New Zomato Order
           </button>
 
           <button
@@ -453,7 +456,7 @@ export default function OnlineDeliveryHub({
               cursor: 'pointer'
             }}
           >
-            + New Swiggy DB Order
+            + New Swiggy Order
           </button>
 
           {onSwitchToManualCallOrder && (
@@ -597,7 +600,7 @@ export default function OnlineDeliveryHub({
             cursor: 'pointer'
           }}
         >
-          All DB Records ({dbOrders.length})
+          All Orders ({dbOrders.length})
         </button>
       </div>
 
@@ -653,7 +656,7 @@ export default function OnlineDeliveryHub({
                     </span>
                     <strong style={{ fontSize: '13px', color: '#0f172a' }}>{order.orderNumber}</strong>
                     <span style={{ fontSize: '9px', color: '#94a3b8', background: '#f1f5f9', padding: '1px 5px', borderRadius: '4px' }}>
-                      DB #{order.id}
+                      #{order.id}
                     </span>
                   </div>
 
@@ -673,7 +676,7 @@ export default function OnlineDeliveryHub({
                         alignItems: 'center',
                         gap: '3px'
                       }}
-                      title="Check and modify order in database"
+                      title="Edit order details"
                     >
                       <Edit2 size={11} /> Modify
                     </button>
@@ -714,7 +717,7 @@ export default function OnlineDeliveryHub({
                   ))}
                 </div>
 
-                {/* Amount, Rider, and Current DB Status */}
+                {/* Amount, Rider, and Current Status */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '11px' }}>
                   <div>
                     <span style={{ fontSize: '10px', color: '#16a34a', fontWeight: 700 }}>✓ {order.paymentStatus}</span>
@@ -723,12 +726,12 @@ export default function OnlineDeliveryHub({
                     </div>
                   </div>
                   <div style={{ textAlign: 'right' }}>
-                    <span style={{ fontSize: '10px', color: '#64748b' }}>DB Status: <b style={{ color: '#0f172a' }}>{order.status}</b></span>
+                    <span style={{ fontSize: '10px', color: '#64748b' }}>Status: <b style={{ color: '#0f172a' }}>{order.status}</b></span>
                     <div style={{ fontSize: '15px', fontWeight: 800, color: '#176b52' }}>₹{order.totalAmount}</div>
                   </div>
                 </div>
 
-                {/* Contextual Actions depending on DB status */}
+                {/* Contextual Actions */}
                 <div style={{ display: 'flex', gap: '6px', marginTop: '4px' }}>
                   {isPending && (
                     <>
@@ -786,7 +789,7 @@ export default function OnlineDeliveryHub({
                           fontWeight: 700,
                           cursor: 'pointer'
                         }}
-                        title="Reject this order in DB"
+                        title="Reject this order"
                       >
                         <X size={14} />
                       </button>
@@ -917,10 +920,10 @@ export default function OnlineDeliveryHub({
           >
             <ShoppingBag size={34} style={{ color: '#cbd5e1', marginBottom: '8px' }} />
             <div style={{ fontWeight: 700, fontSize: '13px', color: '#334155' }}>
-              No orders found in database table `online_delivery_orders`
+              No online delivery orders found
             </div>
             <p style={{ fontSize: '11px', color: '#94a3b8', margin: '4px 0 12px 0' }}>
-              Click on <b>+ New Zomato DB Order</b> or <b>+ New Swiggy DB Order</b> above to save an order directly into MSSQL!
+              Click on <b>+ New Zomato Order</b> or <b>+ New Swiggy Order</b> above to receive orders live!
             </p>
           </div>
         )}
@@ -953,10 +956,10 @@ export default function OnlineDeliveryHub({
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
               <div>
                 <h3 style={{ margin: 0, fontSize: '16px', color: '#0f172a' }}>
-                  Modify Order in DB: {editingOrder.orderNumber}
+                  Modify Order: {editingOrder.orderNumber}
                 </h3>
                 <span style={{ fontSize: '11px', color: '#64748b' }}>
-                  Table: online_delivery_orders · Record ID #{editingOrder.id}
+                  Platform: {editingOrder.platform} · Order #{editingOrder.id}
                 </span>
               </div>
               <button 
@@ -1027,7 +1030,7 @@ export default function OnlineDeliveryHub({
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                 <div>
-                  <label style={{ fontSize: '10px', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '4px' }}>DB STATUS</label>
+                  <label style={{ fontSize: '10px', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '4px' }}>ORDER STATUS</label>
                   <select
                     value={editForm.status}
                     onChange={e => setEditForm({ ...editForm, status: e.target.value })}
@@ -1069,7 +1072,7 @@ export default function OnlineDeliveryHub({
                   gap: '4px'
                 }}
               >
-                <Trash2 size={12} /> Delete from DB
+                <Trash2 size={12} /> Delete Order
               </button>
 
               <div style={{ display: 'flex', gap: '8px' }}>
@@ -1103,7 +1106,7 @@ export default function OnlineDeliveryHub({
                     gap: '5px'
                   }}
                 >
-                  <Save size={13} /> Save to MSSQL DB
+                  <Save size={13} /> Save Changes
                 </button>
               </div>
             </div>

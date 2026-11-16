@@ -4,17 +4,184 @@ import { Armchair, ClipboardList, CreditCard, Receipt, ShoppingBag, Store } from
 export default function OverviewScreen({
   setActive,
   selectedOutlet,
+  setSelectedOutlet,
   analytics,
   bills,
   tables,
   orders,
   outlets,
+  brands,
+  brandAnalytics,
   setSelectedTableId,
   setOrderType,
   setActiveReceipt,
   setShowReceiptModal,
   handleSelectTable
 }) {
+  const isBrandView = selectedOutlet?.id === 'ALL';
+
+  if (isBrandView) {
+    const totalRev = brandAnalytics?.totalBrandRevenue || 0;
+    const totalBills = brandAnalytics?.totalBills || 0;
+    const brandName = brandAnalytics?.brandName || brands?.[0]?.name || 'Tableflow Gourmet Foods';
+    const breakdowns = brandAnalytics?.outletsBreakdown || [];
+
+    return (
+      <>
+        <div className="page-heading">
+          <div>
+            <div className="eyebrow">ENTERPRISE BRAND CONSOLIDATED VIEW</div>
+            <h1>{brandName} Dashboard <span>✦</span></h1>
+            <p>Aggregated real-time metrics across all {breakdowns.length || outlets.length} brand outlets & online delivery channels.</p>
+          </div>
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <button className="primary-btn" onClick={() => setActive('Outlets')}>
+              <Store size={16} /> Manage Outlets
+            </button>
+          </div>
+        </div>
+
+        {/* Brand Banner */}
+        <div className="welcome-banner" style={{ background: 'linear-gradient(135deg, #064e3b 0%, #065f46 50%, #047857 100%)' }}>
+          <div className="banner-copy">
+            <div className="banner-kicker" style={{ color: '#6ee7b7' }}>CENTRAL RESTAURANT BRAND</div>
+            <h2>{brandName}</h2>
+            <p>Unified enterprise view consolidating revenue, dining floor, Swiggy & Zomato orders from all branch locations.</p>
+            <div style={{ display: 'flex', gap: '10px', marginTop: '14px', flexWrap: 'wrap' }}>
+              <span style={{ padding: '6px 14px', background: 'rgba(255,255,255,0.18)', borderRadius: '20px', fontSize: '12px', fontWeight: 700, color: '#fff' }}>
+                🏢 Total Outlets: {breakdowns.length || outlets.length}
+              </span>
+              <span style={{ padding: '6px 14px', background: 'rgba(255,255,255,0.18)', borderRadius: '20px', fontSize: '12px', fontWeight: 700, color: '#fff' }}>
+                ⚡ Multi-Outlet Realtime Sync
+              </span>
+            </div>
+          </div>
+          <div className="banner-art">
+            <div className="art-ring ring-one" />
+            <div className="art-ring ring-two" />
+            <div className="art-store"><Store size={64} strokeWidth={1.2} /></div>
+            <div className="floating-card">
+              <span className="green-dot" /> Consolidated Brand View
+            </div>
+          </div>
+        </div>
+
+        {/* Brand Consolidated Stats Grid */}
+        <div className="section-head">
+          <div>
+            <h2>Consolidated Brand Performance</h2>
+            <p>Combined totals across all operating branches.</p>
+          </div>
+          <span className="updated-label"><span className="green-dot" /> Brand sync</span>
+        </div>
+
+        <div className="stats-grid">
+          <div className="stat-card">
+            <div className="stat-icon tone-0"><CreditCard size={19} /></div>
+            <div className="stat-label">Total Brand Revenue</div>
+            <div className="stat-value">₹{totalRev.toLocaleString('en-IN')}</div>
+            <div className="stat-sub">Across all {breakdowns.length} outlets</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-icon tone-1"><Receipt size={19} /></div>
+            <div className="stat-label">Total Settled Invoices</div>
+            <div className="stat-value">{totalBills}</div>
+            <div className="stat-sub">Bills processed</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-icon tone-2"><Store size={19} /></div>
+            <div className="stat-label">Total Brand Outlets</div>
+            <div className="stat-value">{breakdowns.length || outlets.length}</div>
+            <div className="stat-sub">Operating brand branches</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-icon tone-3"><Armchair size={19} /></div>
+            <div className="stat-label">Total Dining Tables</div>
+            <div className="stat-value">
+              {breakdowns.reduce((sum, b) => sum + (b.totalTables || 0), 0)}
+            </div>
+            <div className="stat-sub">Total tables across network</div>
+          </div>
+        </div>
+
+        {/* Per-Outlet Performance Breakdown Grid */}
+        <div className="section-head" style={{ marginTop: '28px' }}>
+          <div>
+            <h2>Branch Outlets Performance Breakdown</h2>
+            <p>Compare individual branch revenues, bill counts, and delivery partner IDs.</p>
+          </div>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '16px', marginBottom: '24px' }}>
+          {breakdowns.map((b) => (
+            <div
+              key={b.outletId}
+              className="panel"
+              style={{ padding: '20px', borderRadius: '12px', border: '1.5px solid #e2e8f0', background: '#ffffff', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}
+            >
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div className="outlet-icon outlet-0" style={{ width: '38px', height: '38px' }}><Store size={20} /></div>
+                    <div>
+                      <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700 }}>{b.outletName}</h3>
+                      <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>Code: {b.outletCode}</span>
+                    </div>
+                  </div>
+                  <span style={{ fontSize: '10px', fontWeight: 800, padding: '3px 8px', borderRadius: '6px', background: '#ecfdf5', color: '#16a34a' }}>
+                    ACTIVE
+                  </span>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', margin: '14px 0', padding: '12px', background: '#f8fafc', borderRadius: '8px' }}>
+                  <div>
+                    <span style={{ fontSize: '10px', color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>Revenue</span>
+                    <div style={{ fontSize: '17px', fontWeight: 800, color: '#176b52' }}>₹{(b.revenue || 0).toLocaleString('en-IN')}</div>
+                  </div>
+                  <div>
+                    <span style={{ fontSize: '10px', color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>Bills</span>
+                    <div style={{ fontSize: '17px', fontWeight: 800, color: '#1e293b' }}>{b.billsCount || 0} Settled</div>
+                  </div>
+                  <div>
+                    <span style={{ fontSize: '10px', color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>Tables</span>
+                    <div style={{ fontSize: '13px', fontWeight: 700, color: '#334155' }}>{b.totalTables || 0} Tables</div>
+                  </div>
+                  <div>
+                    <span style={{ fontSize: '10px', color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>Occupancy</span>
+                    <div style={{ fontSize: '13px', fontWeight: 700, color: '#334155' }}>{b.occupiedTables || 0} Occupied</div>
+                  </div>
+                </div>
+
+                {/* Aggregator ID Badges */}
+                <div style={{ display: 'flex', gap: '6px', marginBottom: '14px', flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: '10px', padding: '2px 8px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '6px', color: '#dc2626', fontWeight: 600 }}>
+                    <strong>Zomato Store:</strong> {b.zomatoStoreId || 'N/A'}
+                  </span>
+                  <span style={{ fontSize: '10px', padding: '2px 8px', background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: '6px', color: '#ea580c', fontWeight: 600 }}>
+                    <strong>Swiggy Store:</strong> {b.swiggyStoreId || 'N/A'}
+                  </span>
+                </div>
+              </div>
+
+              <button
+                className="outline-btn"
+                style={{ width: '100%', justifyContent: 'center', padding: '8px 14px', fontSize: '11px', fontWeight: 700 }}
+                onClick={() => {
+                  const target = outlets.find(o => o.id === b.outletId);
+                  if (target && setSelectedOutlet) {
+                    setSelectedOutlet(target);
+                  }
+                }}
+              >
+                Switch to {b.outletName} Terminal <span>→</span>
+              </button>
+            </div>
+          ))}
+        </div>
+      </>
+    );
+  }
+
   return (
     <>
       <div className="page-heading">
@@ -75,13 +242,13 @@ export default function OverviewScreen({
           <div className="stat-icon tone-2"><ClipboardList size={19} /></div>
           <div className="stat-label">Active KOT Tickets</div>
           <div className="stat-value">{orders.filter(o => o.status !== 'Completed').length}</div>
-          <div className="stat-sub">From restaurant_orders table</div>
+          <div className="stat-sub">Live kitchen preparation</div>
         </div>
         <div className="stat-card">
           <div className="stat-icon tone-3"><Store size={19} /></div>
           <div className="stat-label">Active Outlets</div>
           <div className="stat-value">{outlets.length}</div>
-          <div className="stat-sub">Branches in outlets table</div>
+          <div className="stat-sub">Operational restaurant branches</div>
         </div>
       </div>
 
@@ -135,7 +302,7 @@ export default function OverviewScreen({
           </div>
           {bills.length === 0 ? (
             <div style={{ padding: '20px', color: '#94a3b8', fontSize: '11px', textAlign: 'center' }}>
-              No bills yet in database.
+              No bills settled yet today.
             </div>
           ) : (
             bills.slice(0, 3).map(b => (

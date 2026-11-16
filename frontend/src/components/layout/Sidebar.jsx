@@ -2,6 +2,7 @@ import React from 'react';
 import {
   Armchair,
   BarChart3,
+  Bike,
   CircleHelp,
   ClipboardList,
   Coffee,
@@ -23,6 +24,7 @@ const NAV_ITEMS = [
   ['POS Terminal', ShoppingBag],
   ['Tables', Armchair],
   ['Orders & KOT', ClipboardList],
+  ['Online Delivery', Bike],
   ['Menu & Products', Coffee],
   ['Billing & Payments', CreditCard],
   ['Customers', Users],
@@ -33,12 +35,12 @@ const NAV_ITEMS = [
 ];
 
 const ROLE_PERMISSIONS = {
-  SUPER_ADMIN: ['Overview', 'POS Terminal', 'Tables', 'Orders & KOT', 'Menu & Products', 'Billing & Payments', 'Customers', 'Outlets', 'Reports', 'Staff & Roles', 'Settings'],
-  ADMIN: ['Overview', 'POS Terminal', 'Tables', 'Orders & KOT', 'Menu & Products', 'Billing & Payments', 'Customers', 'Reports', 'Staff & Roles'],
-  MANAGER: ['Overview', 'POS Terminal', 'Tables', 'Orders & KOT', 'Menu & Products', 'Billing & Payments', 'Customers', 'Reports'],
-  CASHIER: ['POS Terminal', 'Tables', 'Billing & Payments'],
+  SUPER_ADMIN: ['Overview', 'POS Terminal', 'Tables', 'Orders & KOT', 'Online Delivery', 'Menu & Products', 'Billing & Payments', 'Customers', 'Outlets', 'Reports', 'Staff & Roles', 'Settings'],
+  ADMIN: ['Overview', 'POS Terminal', 'Tables', 'Orders & KOT', 'Online Delivery', 'Menu & Products', 'Billing & Payments', 'Customers', 'Reports', 'Staff & Roles'],
+  MANAGER: ['Overview', 'POS Terminal', 'Tables', 'Orders & KOT', 'Online Delivery', 'Menu & Products', 'Billing & Payments', 'Customers', 'Reports'],
+  CASHIER: ['POS Terminal', 'Tables', 'Online Delivery', 'Billing & Payments'],
   WAITER: ['Tables', 'POS Terminal'],
-  KITCHEN: ['Orders & KOT'],
+  KITCHEN: ['Orders & KOT', 'Online Delivery'],
 };
 
 export default function Sidebar({
@@ -48,10 +50,16 @@ export default function Sidebar({
   setSidebarOpen,
   selectedOutlet,
   orders,
+  kitchenOrders,
   currentUser,
   onLogout
 }) {
-  const activeKotCount = orders.filter(o => o.status === 'In Kitchen').length;
+  const currentOutletId = selectedOutlet?.id;
+  const ticketsToCount = (kitchenOrders && kitchenOrders.length > 0) ? kitchenOrders : (orders || []);
+  const outletTickets = currentOutletId 
+    ? ticketsToCount.filter(t => !t.outletId || t.outletId === currentOutletId)
+    : ticketsToCount;
+  const activeKotCount = outletTickets.filter(t => t.status === 'In Kitchen' || t.status === 'Preparing').length;
   const userRole = currentUser?.role || 'WAITER';
   const isSuperAdmin = userRole === 'SUPER_ADMIN';
   const allowedTabs = ROLE_PERMISSIONS[userRole] || ROLE_PERMISSIONS.WAITER;
