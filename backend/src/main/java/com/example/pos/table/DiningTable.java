@@ -3,13 +3,15 @@ package com.example.pos.table;
 import jakarta.persistence.*;
 
 @Entity
-@Table(name = "dining_tables")
+@Table(name = "dining_tables", uniqueConstraints = {
+    @UniqueConstraint(name = "UQ_dining_tables_outlet_code", columnNames = {"outlet_id", "code"})
+})
 public class DiningTable {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, unique = true, length = 30)
+    @Column(nullable = false, length = 30)
     private String code;
 
     @Column(nullable = false, length = 100)

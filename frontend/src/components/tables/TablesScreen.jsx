@@ -63,6 +63,7 @@ export default function TablesScreen({
           name: form.name.trim(),
           zone: form.zone,
           seats: parseInt(form.seats, 10) || 4,
+          outletId: selectedOutlet?.id || 1,
         });
       }
       setShowAddModal(false);

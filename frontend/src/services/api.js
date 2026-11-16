@@ -134,8 +134,17 @@ export async function createTable(payload) {
     body: JSON.stringify(payload)
   });
   if (!res.ok) {
-    const err = await res.text();
-    throw new Error(err || 'Failed to create dining table');
+    let errMsg = 'Failed to create dining table';
+    try {
+      const text = await res.text();
+      try {
+        const json = JSON.parse(text);
+        errMsg = json.message || json.error || text || errMsg;
+      } catch {
+        if (text) errMsg = text;
+      }
+    } catch {}
+    throw new Error(errMsg);
   }
   return res.json();
 }

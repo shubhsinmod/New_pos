@@ -7,5 +7,10 @@ import java.util.Optional;
 public interface DiningTableRepository extends JpaRepository<DiningTable, Long> {
     List<DiningTable> findAllByOrderByIdAsc();
     List<DiningTable> findByOutletIdOrderByIdAsc(Long outletId);
-    Optional<DiningTable> findByCode(String code);
+    Optional<DiningTable> findByOutletIdAndCode(Long outletId, String code);
+    Optional<DiningTable> findFirstByCode(String code);
+    default Optional<DiningTable> findByCode(String code) {
+        return findFirstByCode(code);
+    }
+    boolean existsByOutletIdAndCode(Long outletId, String code);
 }

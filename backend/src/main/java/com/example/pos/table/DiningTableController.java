@@ -31,8 +31,12 @@ public class DiningTableController {
     }
 
     @GetMapping("/{code}")
-    public DiningTable findByCode(@PathVariable String code) {
-        return repository.findByCode(code)
+    public DiningTable findByCode(@PathVariable String code, @RequestParam(required = false) Long outletId) {
+        if (outletId != null) {
+            return repository.findByOutletIdAndCode(outletId, code)
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Table not found: " + code));
+        }
+        return repository.findFirstByCode(code)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Table not found: " + code));
     }
 
@@ -52,13 +56,52 @@ public class DiningTableController {
         if (table.getOutletId() == null) {
             table.setOutletId(1L);
         }
+        if (table.getCode() == null || table.getCode().trim().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Table code is required.");
+        }
+        if (table.getName() == null || table.getName().trim().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Table name is required.");
+        }
+
+        String normalizedCode = table.getCode().trim().toUpperCase();
+        table.setCode(normalizedCode);
+        table.setName(table.getName().trim());
+
+        if (repository.existsByOutletIdAndCode(table.getOutletId(), normalizedCode)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Table code " + normalizedCode + " already exists for this outlet.");
+        }
+
+        if (table.getStatus() == null || table.getStatus().isBlank()) {
+            table.setStatus("Available");
+        }
+        if (table.getRunningTotal() == null) {
+            table.setRunningTotal(0.0);
+        }
+
         return repository.save(table);
     }
 
     @PutMapping("/{code}/status")
-    public DiningTable updateStatus(@PathVariable String code, @RequestBody Map<String, Object> body) {
-        DiningTable table = repository.findByCode(code)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Table not found: " + code));
+    public DiningTable updateStatus(@PathVariable String code, @RequestParam(required = false) Long outletId, @RequestBody Map<String, Object> body) {
+        Long targetOutletId = outletId;
+        if (targetOutletId == null && body.containsKey("outletId")) {
+            Object oid = body.get("outletId");
+            if (oid instanceof Number) {
+                targetOutletId = ((Number) oid).longValue();
+            } else if (oid != null) {
+                try {
+                    targetOutletId = Long.parseLong(oid.toString());
+                } catch (NumberFormatException ignored) {}
+            }
+        }
+
+        DiningTable table = (targetOutletId != null)
+                ? repository.findByOutletIdAndCode(targetOutletId, code).orElse(null)
+                : null;
+        if (table == null) {
+            table = repository.findFirstByCode(code)
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Table not found: " + code));
+        }
 
         if (body.containsKey("status")) {
             table.setStatus((String) body.get("status"));
@@ -94,9 +137,14 @@ public class DiningTableController {
     }
 
     @PutMapping("/{code}/vacate")
-    public DiningTable vacateTable(@PathVariable String code) {
-        DiningTable table = repository.findByCode(code)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Table not found: " + code));
+    public DiningTable vacateTable(@PathVariable String code, @RequestParam(required = false) Long outletId) {
+        DiningTable table = (outletId != null)
+                ? repository.findByOutletIdAndCode(outletId, code).orElse(null)
+                : null;
+        if (table == null) {
+            table = repository.findFirstByCode(code)
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Table not found: " + code));
+        }
 
         table.setStatus("Available");
         table.setRunningTotal(0.0);
