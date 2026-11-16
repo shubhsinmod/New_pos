@@ -269,7 +269,7 @@ export default function ReceiptModal({
 
           <div className="receipt-row">
             <span>Subtotal</span>
-            <span>₹${subtotal}</span>
+            <span>₹{subtotal}</span>
           </div>
           {discount > 0 && (
             <div className="receipt-row">
