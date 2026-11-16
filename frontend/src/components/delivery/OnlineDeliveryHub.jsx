@@ -16,19 +16,21 @@ import {
   VolumeX, 
   CheckCircle2, 
   ShoppingBag,
-  ExternalLink
+  Edit2,
+  Save,
+  Database
 } from 'lucide-react';
 import * as api from '../../services/api';
 
-// Native Browser Audio Beep for Incoming Orders
+// Browser Audio Beep for Incoming Orders
 function playDingSound() {
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.type = 'sine';
-    osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
-    osc.frequency.setValueAtTime(880, ctx.currentTime + 0.12); // A5
+    osc.frequency.setValueAtTime(587.33, ctx.currentTime);
+    osc.frequency.setValueAtTime(880, ctx.currentTime + 0.12);
     gain.gain.setValueAtTime(0.35, ctx.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.55);
     osc.connect(gain);
@@ -37,55 +39,6 @@ function playDingSound() {
     osc.stop(ctx.currentTime + 0.55);
   } catch {}
 }
-
-const SAMPLE_ONLINE_ORDERS = [
-  {
-    id: 'zom-101',
-    platform: 'Zomato',
-    orderNumber: 'ZOM-4892',
-    placedAt: new Date(Date.now() - 3 * 60 * 1000).toISOString(),
-    customerName: 'Rahul Sharma',
-    customerPhone: '+91 98765 43210',
-    deliveryAddress: 'Flat 402, Oakwood Heights, Indiranagar, Bengaluru',
-    instructions: 'Don\'t ring bell, baby sleeping. Leave at door.',
-    items: [
-      { name: 'Paneer Butter Masala', qty: 1, price: 290, isVeg: true },
-      { name: 'Butter Garlic Naan', qty: 2, price: 60, isVeg: true }
-    ],
-    subtotal: 410,
-    tax: 20.5,
-    deliveryFee: 30,
-    total: 460.5,
-    paymentStatus: 'PAID (UPI)',
-    riderName: 'Suresh Kumar',
-    riderPhone: '+91 98450 11223',
-    riderEta: '12 mins',
-    status: 'Pending Acceptance'
-  },
-  {
-    id: 'swg-202',
-    platform: 'Swiggy',
-    orderNumber: 'SWG-7319',
-    placedAt: new Date(Date.now() - 8 * 60 * 1000).toISOString(),
-    customerName: 'Ananya Verma',
-    customerPhone: '+91 98111 22334',
-    deliveryAddress: 'Villa 12, Palm Meadows, Whitefield, Bengaluru',
-    instructions: 'Send extra green chutney and onions please.',
-    items: [
-      { name: 'Butter Chicken Gravy', qty: 1, price: 360, isVeg: false },
-      { name: 'Hyderabadi Chicken Biryani', qty: 1, price: 340, isVeg: false }
-    ],
-    subtotal: 700,
-    tax: 35,
-    deliveryFee: 40,
-    total: 775,
-    paymentStatus: 'PAID (Card)',
-    riderName: 'Manoj Patel',
-    riderPhone: '+91 97312 44556',
-    riderEta: '8 mins',
-    status: 'Pending Acceptance'
-  }
-];
 
 export default function OnlineDeliveryHub({
   orders,
@@ -97,122 +50,173 @@ export default function OnlineDeliveryHub({
   onSwitchToManualCallOrder
 }) {
   const [onlineTab, setOnlineTab] = useState('New'); // 'New' | 'In Kitchen' | 'Ready' | 'Completed' | 'All'
-  const [pendingOrders, setPendingOrders] = useState(() => {
-    try {
-      const saved = localStorage.getItem('pos_pending_online_orders');
-      return saved ? JSON.parse(saved) : SAMPLE_ONLINE_ORDERS;
-    } catch {
-      return SAMPLE_ONLINE_ORDERS;
-    }
-  });
+  const [dbOrders, setDbOrders] = useState([]);
+  const [loading, setLoading] = useState(false);
   const [autoAccept, setAutoAccept] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
 
-  // Sync pending orders to localStorage
+  // Edit / Modify Modal State
+  const [editingOrder, setEditingOrder] = useState(null);
+  const [editForm, setEditForm] = useState({
+    customerName: '',
+    customerPhone: '',
+    deliveryAddress: '',
+    instructions: '',
+    riderName: '',
+    riderPhone: '',
+    riderEta: '',
+    prepTimeMinutes: 15,
+    status: 'Pending Acceptance'
+  });
+
+  const activeOutletId = selectedOutlet?.id || 1;
+
+  // Load online delivery orders directly from MSSQL database table: online_delivery_orders
+  const loadDeliveryOrders = async () => {
+    setLoading(true);
+    try {
+      const data = await api.getDeliveryOrders(activeOutletId);
+      if (Array.isArray(data)) {
+        setDbOrders(data);
+      }
+    } catch (err) {
+      console.error('Error fetching online delivery orders:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    try {
-      localStorage.setItem('pos_pending_online_orders', JSON.stringify(pendingOrders));
-    } catch {}
-  }, [pendingOrders]);
+    loadDeliveryOrders();
+  }, [activeOutletId]);
 
-  // Active delivery orders from database (Already accepted & in kitchen / completed)
-  const dbDeliveryOrders = (orders || []).filter(o => o.orderType === 'Delivery');
+  // Derived counts from MSSQL DB records
+  const pendingOrders = dbOrders.filter(o => o.status === 'Pending Acceptance');
+  const preparingOrders = dbOrders.filter(o => o.status === 'In Kitchen' || o.status === 'Preparing' || o.status === 'Accepted');
+  const readyOrders = dbOrders.filter(o => o.status === 'Ready for Pickup' || o.status === 'Ready to Serve');
+  const completedOrders = dbOrders.filter(o => o.status === 'Completed' || o.status === 'Dispatched' || o.status === 'Delivered');
 
-  const pendingCount = pendingOrders.filter(o => o.status === 'Pending Acceptance').length;
-  const preparingCount = dbDeliveryOrders.filter(o => o.status === 'In Kitchen' || o.status === 'Preparing').length;
-  const readyCount = dbDeliveryOrders.filter(o => o.status === 'Ready to Serve').length;
-  const completedCount = dbDeliveryOrders.filter(o => o.status === 'Completed' || o.status === 'Delivered').length;
-
-  // Accept Online Order -> Dispatches to DB & Kitchen KOT
+  // Accept Online Order -> Updates MSSQL online_delivery_orders table & syncs to RestaurantOrder KOT
   const handleAcceptOnlineOrder = async (order, prepTimeMinutes = 15) => {
-    const oid = selectedOutlet?.id || 1;
-    const formattedNotes = `[${order.platform.toUpperCase()} DELIVERY] Drop: ${order.deliveryAddress} | Rider: ${order.riderName || 'Assigned'} (${order.riderPhone || 'N/A'})${order.instructions ? ` | Note: ${order.instructions}` : ''} | Prep: ${prepTimeMinutes}m`;
-
-    const orderPayload = {
-      orderNumber: order.orderNumber,
-      tableCode: `${order.platform} #${order.orderNumber.replace(/[^0-9]/g, '') || Math.floor(1000 + Math.random() * 9000)}`,
-      orderType: 'Delivery',
-      status: 'In Kitchen',
-      itemsJson: JSON.stringify(order.items),
-      subtotal: order.subtotal || order.items.reduce((s, i) => s + (i.price * i.qty), 0),
-      discount: 0,
-      tax: order.tax || 0,
-      total: order.total || order.subtotal || 0,
-      customerName: order.customerName,
-      customerPhone: order.customerPhone,
-      notes: formattedNotes,
-      outletId: oid
-    };
-
     try {
-      const savedOrder = await api.createOrder(orderPayload);
-      setOrders(prev => [{ ...savedOrder, items: order.items }, ...prev]);
-      
-      // Remove from pending queue
-      setPendingOrders(prev => prev.filter(o => o.id !== order.id));
+      const updated = await api.updateDeliveryOrderStatus(order.id, 'In Kitchen', prepTimeMinutes);
+      setDbOrders(prev => prev.map(o => o.id === order.id ? updated : o));
+
+      // Refresh orders in parent state so Kitchen Display (KDS) immediately receives the ticket
+      const kitchenOrders = await api.getOrders(activeOutletId);
+      if (Array.isArray(kitchenOrders)) {
+        setOrders(kitchenOrders.map(o => ({
+          ...o,
+          items: typeof o.itemsJson === 'string' ? JSON.parse(o.itemsJson || '[]') : (o.items || [])
+        })));
+      }
 
       if (soundEnabled) playDingSound();
-      setNotice(`✅ ${order.platform} Order #${order.orderNumber} Accepted! KOT dispatched to Kitchen (${prepTimeMinutes} mins prep).`);
+      setNotice(`✅ ${order.platform} Order #${order.orderNumber} Accepted in DB! KOT dispatched to Kitchen (${prepTimeMinutes}m prep).`);
       setOnlineTab('In Kitchen');
     } catch (err) {
-      setNotice('Error accepting order: ' + err.message);
+      setNotice('Error accepting order in database: ' + err.message);
     }
   };
 
-  // Reject Online Order
-  const handleRejectOnlineOrder = (orderId, platform) => {
-    setPendingOrders(prev => prev.filter(o => o.id !== orderId));
-    setNotice(`❌ ${platform} Order rejected.`);
+  // Reject Online Order -> Updates status in database
+  const handleRejectOnlineOrder = async (orderId, platform) => {
+    try {
+      const updated = await api.updateDeliveryOrderStatus(orderId, 'Rejected');
+      setDbOrders(prev => prev.map(o => o.id === orderId ? updated : o));
+      setNotice(`❌ ${platform} Order rejected in database.`);
+    } catch (err) {
+      setNotice('Error rejecting order: ' + err.message);
+    }
   };
 
-  // Mark Ready for Rider Pickup
-  const handleMarkReady = async (orderId, orderNum) => {
+  // Mark Food Ready for Rider Pickup
+  const handleMarkReady = async (order) => {
     try {
-      await api.updateOrderStatus(orderId, 'Ready to Serve');
-      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'Ready to Serve' } : o));
+      const updated = await api.updateDeliveryOrderStatus(order.id, 'Ready for Pickup');
+      setDbOrders(prev => prev.map(o => o.id === order.id ? updated : o));
       if (soundEnabled) playDingSound();
-      setNotice(`🛵 Order #${orderNum} marked Ready for Rider Pickup!`);
+      setNotice(`🛵 Order #${order.orderNumber} marked Ready for Rider in DB!`);
+    } catch (err) {
+      setNotice('Error updating status in database: ' + err.message);
+    }
+  };
+
+  // Mark Handed Over / Completed in database
+  const handleMarkCompleted = async (order) => {
+    try {
+      const updated = await api.updateDeliveryOrderStatus(order.id, 'Completed');
+      setDbOrders(prev => prev.map(o => o.id === order.id ? updated : o));
+      setNotice(`✓ Order #${order.orderNumber} handed over to Rider & Completed in DB.`);
     } catch (err) {
       setNotice('Error updating status: ' + err.message);
     }
   };
 
-  // Mark Handed Over / Completed
-  const handleMarkCompleted = async (orderId, orderNum) => {
+  // Open Edit Modal for checking and modifying any delivery order in DB
+  const handleOpenEdit = (order) => {
+    setEditingOrder(order);
+    setEditForm({
+      customerName: order.customerName || '',
+      customerPhone: order.customerPhone || '',
+      deliveryAddress: order.deliveryAddress || '',
+      instructions: order.instructions || '',
+      riderName: order.riderName || '',
+      riderPhone: order.riderPhone || '',
+      riderEta: order.riderEta || '',
+      prepTimeMinutes: order.prepTimeMinutes || 15,
+      status: order.status || 'Pending Acceptance'
+    });
+  };
+
+  // Save modified order details to MSSQL database
+  const handleSaveEdit = async () => {
+    if (!editingOrder) return;
     try {
-      await api.updateOrderStatus(orderId, 'Completed');
-      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'Completed' } : o));
-      setNotice(`✓ Order #${orderNum} handed over to Rider & Completed.`);
+      const updated = await api.updateDeliveryOrder(editingOrder.id, editForm);
+      setDbOrders(prev => prev.map(o => o.id === editingOrder.id ? updated : o));
+      setNotice(`✅ Order #${editingOrder.orderNumber} modified & saved to MSSQL database!`);
+      setEditingOrder(null);
     } catch (err) {
-      setNotice('Error updating status: ' + err.message);
+      setNotice('Error saving order modifications: ' + err.message);
+    }
+  };
+
+  // Delete an order from database
+  const handleDeleteOrder = async (orderId, orderNum) => {
+    if (!window.confirm(`Are you sure you want to delete order #${orderNum} from database?`)) return;
+    try {
+      await api.deleteDeliveryOrder(orderId);
+      setDbOrders(prev => prev.filter(o => o.id !== orderId));
+      setNotice(`Order #${orderNum} deleted from database.`);
+    } catch (err) {
+      setNotice('Error deleting order: ' + err.message);
     }
   };
 
   // Print Thermal Packing Slip
   const handlePrintPackingSlip = (order) => {
-    const items = Array.isArray(order.items) 
-      ? order.items 
-      : typeof order.itemsJson === 'string' 
+    const items = typeof order.itemsJson === 'string' 
       ? JSON.parse(order.itemsJson || '[]') 
-      : [];
+      : (order.items || []);
 
     setActiveReceipt({
       billNumber: order.orderNumber,
       orderNumber: order.orderNumber,
-      tableCode: order.tableCode,
+      tableCode: `${order.platform} #${order.orderNumber.replace(/[^0-9]/g, '')}`,
       orderType: 'Delivery',
       customerName: order.customerName,
       customerPhone: order.customerPhone,
-      deliveryAddress: order.notes?.includes('Drop:') ? order.notes.split('Drop:')[1]?.split('|')[0]?.trim() : order.deliveryAddress,
-      deliveryPartner: order.notes?.includes('SWIGGY') ? 'Swiggy' : order.notes?.includes('ZOMATO') ? 'Zomato' : 'Online Partner',
+      deliveryAddress: order.deliveryAddress,
+      deliveryPartner: order.platform,
       riderName: order.riderName,
       riderPhone: order.riderPhone,
       items,
-      subtotal: order.subtotal || order.total,
-      discount: order.discount || 0,
+      subtotal: order.subtotal || order.totalAmount,
+      discount: 0,
       tax: order.tax || 0,
-      total: order.total || order.subtotal,
-      paymentMode: 'ONLINE PAID',
+      total: order.totalAmount,
+      paymentMode: order.paymentStatus || 'ONLINE PAID',
       outletName: selectedOutlet?.name || 'Tableflow POS',
       outletAddress: selectedOutlet?.address || '',
       gstin: selectedOutlet?.gstin || ''
@@ -220,8 +224,8 @@ export default function OnlineDeliveryHub({
     setShowReceiptModal(true);
   };
 
-  // Simulate Incoming Online Order from Zomato or Swiggy
-  const handleSimulateOrder = (platform = 'Zomato') => {
+  // Simulate Incoming Online Order -> Performs real POST /api/delivery-orders to MSSQL
+  const handleSimulateOrder = async (platform = 'Zomato') => {
     const isZomato = platform === 'Zomato';
     const randNum = Math.floor(1000 + Math.random() * 9000);
     const mockNames = ['Vikram Singh', 'Pooja Hegde', 'Arjun Kapoor', 'Sneha Reddy', 'Rohan Mehta'];
@@ -252,34 +256,39 @@ export default function OnlineDeliveryHub({
     const tax = Math.round(subtotal * 0.05 * 100) / 100;
     const total = subtotal + tax + 35;
 
-    const newSimulated = {
-      id: `${platform.toLowerCase()}-${Date.now()}`,
+    const payload = {
       platform,
       orderNumber: `${isZomato ? 'ZOM' : 'SWG'}-${randNum}`,
-      placedAt: new Date().toISOString(),
       customerName: mockNames[Math.floor(Math.random() * mockNames.length)],
       customerPhone: `+91 ${Math.floor(9000000000 + Math.random() * 999999999)}`,
       deliveryAddress: mockAddresses[Math.floor(Math.random() * mockAddresses.length)],
       instructions: isZomato ? 'Contactless delivery, drop at security' : 'Please provide cutlery and tissue',
-      items: chosenDishes,
+      itemsJson: JSON.stringify(chosenDishes),
       subtotal,
       tax,
       deliveryFee: 35,
-      total,
+      totalAmount: total,
       paymentStatus: 'PAID (Online Gateway)',
       riderName: 'Delivery Partner Assigned',
       riderPhone: '+91 98' + Math.floor(10000000 + Math.random() * 90000000),
       riderEta: `${Math.floor(8 + Math.random() * 12)} mins`,
-      status: 'Pending Acceptance'
+      prepTimeMinutes: 15,
+      status: 'Pending Acceptance',
+      outletId: activeOutletId
     };
 
-    setPendingOrders(prev => [newSimulated, ...prev]);
-    if (soundEnabled) playDingSound();
-    setNotice(`🔔 BEEP! New Incoming ${platform} Order #${newSimulated.orderNumber} received!`);
-    setOnlineTab('New');
+    try {
+      const created = await api.createDeliveryOrder(payload);
+      setDbOrders(prev => [created, ...prev]);
+      if (soundEnabled) playDingSound();
+      setNotice(`🔔 Real DB Entry Created! New ${platform} Order #${created.orderNumber} saved to MSSQL.`);
+      setOnlineTab('New');
 
-    if (autoAccept) {
-      handleAcceptOnlineOrder(newSimulated, 15);
+      if (autoAccept) {
+        handleAcceptOnlineOrder(created, 15);
+      }
+    } catch (err) {
+      setNotice('Error inserting online order into database: ' + err.message);
     }
   };
 
@@ -301,8 +310,9 @@ export default function OnlineDeliveryHub({
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ fontSize: '13px', fontWeight: 800, color: '#0f172a' }}>Live Aggregators:</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <Database size={15} color="#176b52" />
+            <span style={{ fontSize: '13px', fontWeight: 800, color: '#0f172a' }}>DB: online_delivery_orders</span>
           </div>
 
           {/* Zomato Pill */}
@@ -319,7 +329,7 @@ export default function OnlineDeliveryHub({
             fontWeight: 700
           }}>
             <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#ef4444', display: 'inline-block' }} />
-            🔴 ZOMATO <span style={{ fontSize: '9px', color: '#16a34a', background: '#dcfce7', padding: '1px 5px', borderRadius: '10px' }}>Active</span>
+            🔴 ZOMATO <span style={{ fontSize: '9px', color: '#16a34a', background: '#dcfce7', padding: '1px 5px', borderRadius: '10px' }}>Active API</span>
           </div>
 
           {/* Swiggy Pill */}
@@ -336,24 +346,30 @@ export default function OnlineDeliveryHub({
             fontWeight: 700
           }}>
             <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#f97316', display: 'inline-block' }} />
-            🟠 SWIGGY <span style={{ fontSize: '9px', color: '#16a34a', background: '#dcfce7', padding: '1px 5px', borderRadius: '10px' }}>Active</span>
+            🟠 SWIGGY <span style={{ fontSize: '9px', color: '#16a34a', background: '#dcfce7', padding: '1px 5px', borderRadius: '10px' }}>Active API</span>
           </div>
 
-          {/* Dunzo / ONDC Pill */}
-          <div style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '6px',
-            background: '#f0fdf4',
-            border: '1px solid #bbf7d0',
-            color: '#15803d',
-            padding: '4px 10px',
-            borderRadius: '20px',
-            fontSize: '11px',
-            fontWeight: 700
-          }}>
-            <Zap size={12} /> ONDC / UrbanPiper <span style={{ fontSize: '9px', color: '#15803d', background: '#dcfce7', padding: '1px 5px', borderRadius: '10px' }}>Connected</span>
-          </div>
+          {/* Refresh DB button */}
+          <button
+            onClick={loadDeliveryOrders}
+            disabled={loading}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              border: '1px solid #cbd5e1',
+              background: '#f8fafc',
+              borderRadius: '6px',
+              padding: '4px 8px',
+              fontSize: '10px',
+              fontWeight: 700,
+              color: '#475569',
+              cursor: 'pointer'
+            }}
+            title="Reload live orders from MSSQL database"
+          >
+            <RefreshCw size={11} className={loading ? 'spin' : ''} /> Refresh DB
+          </button>
         </div>
 
         {/* Action Controls */}
@@ -374,7 +390,6 @@ export default function OnlineDeliveryHub({
               color: soundEnabled ? '#0f172a' : '#94a3b8',
               cursor: 'pointer'
             }}
-            title={soundEnabled ? 'Mute incoming order sound' : 'Enable incoming order sound'}
           >
             {soundEnabled ? <Volume2 size={14} color="#16a34a" /> : <VolumeX size={14} />} Sound {soundEnabled ? 'ON' : 'OFF'}
           </button>
@@ -402,49 +417,45 @@ export default function OnlineDeliveryHub({
             <Zap size={13} color={autoAccept ? '#16a34a' : '#64748b'} /> Auto-Accept: {autoAccept ? 'ON' : 'OFF'}
           </button>
 
-          {/* Simulator Dropdown / Buttons */}
-          <div style={{ display: 'flex', gap: '4px' }}>
-            <button
-              onClick={() => handleSimulateOrder('Zomato')}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '5px',
-                border: '1px solid #fecaca',
-                background: '#dc2626',
-                color: '#ffffff',
-                borderRadius: '6px',
-                padding: '6px 10px',
-                fontSize: '11px',
-                fontWeight: 700,
-                cursor: 'pointer',
-                boxShadow: '0 2px 4px rgba(220,38,38,0.2)'
-              }}
-            >
-              + Test Zomato Order
-            </button>
-            <button
-              onClick={() => handleSimulateOrder('Swiggy')}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '5px',
-                border: '1px solid #fed7aa',
-                background: '#ea580c',
-                color: '#ffffff',
-                borderRadius: '6px',
-                padding: '6px 10px',
-                fontSize: '11px',
-                fontWeight: 700,
-                cursor: 'pointer',
-                boxShadow: '0 2px 4px rgba(234,88,12,0.2)'
-              }}
-            >
-              + Test Swiggy Order
-            </button>
-          </div>
+          {/* Test Buttons - Inserts row into DB */}
+          <button
+            onClick={() => handleSimulateOrder('Zomato')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '5px',
+              border: '1px solid #fecaca',
+              background: '#dc2626',
+              color: '#ffffff',
+              borderRadius: '6px',
+              padding: '6px 10px',
+              fontSize: '11px',
+              fontWeight: 700,
+              cursor: 'pointer'
+            }}
+          >
+            + New Zomato DB Order
+          </button>
 
-          {/* Switch to manual call order */}
+          <button
+            onClick={() => handleSimulateOrder('Swiggy')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '5px',
+              border: '1px solid #fed7aa',
+              background: '#ea580c',
+              color: '#ffffff',
+              borderRadius: '6px',
+              padding: '6px 10px',
+              fontSize: '11px',
+              fontWeight: 700,
+              cursor: 'pointer'
+            }}
+          >
+            + New Swiggy DB Order
+          </button>
+
           {onSwitchToManualCallOrder && (
             <button
               onClick={onSwitchToManualCallOrder}
@@ -469,7 +480,7 @@ export default function OnlineDeliveryHub({
       </div>
 
       {/* Filter Tabs */}
-      <div style={{ display: 'flex', gap: '8px', borderBottom: '1px solid #e2e8f0', paddingBottom: '8px' }}>
+      <div style={{ display: 'flex', gap: '8px', borderBottom: '1px solid #e2e8f0', paddingBottom: '8px', alignItems: 'center' }}>
         <button
           onClick={() => setOnlineTab('New')}
           style={{
@@ -494,7 +505,7 @@ export default function OnlineDeliveryHub({
             padding: '1px 7px',
             fontSize: '10px'
           }}>
-            {pendingCount}
+            {pendingOrders.length}
           </span>
         </button>
 
@@ -522,7 +533,7 @@ export default function OnlineDeliveryHub({
             padding: '1px 7px',
             fontSize: '10px'
           }}>
-            {preparingCount}
+            {preparingOrders.length}
           </span>
         </button>
 
@@ -542,7 +553,7 @@ export default function OnlineDeliveryHub({
             gap: '6px'
           }}
         >
-          <span>🛵 Food Ready / Rider Assigned</span>
+          <span>🛵 Food Ready / Rider Pickup</span>
           <span style={{
             background: onlineTab === 'Ready' ? '#ffffff' : '#16a34a',
             color: onlineTab === 'Ready' ? '#16a34a' : '#ffffff',
@@ -550,7 +561,7 @@ export default function OnlineDeliveryHub({
             padding: '1px 7px',
             fontSize: '10px'
           }}>
-            {readyCount}
+            {readyOrders.length}
           </span>
         </button>
 
@@ -570,192 +581,67 @@ export default function OnlineDeliveryHub({
             gap: '6px'
           }}
         >
-          <span>✓ Dispatched ({completedCount})</span>
+          <span>✓ Dispatched ({completedOrders.length})</span>
+        </button>
+
+        <button
+          onClick={() => setOnlineTab('All')}
+          style={{
+            border: 0,
+            background: onlineTab === 'All' ? '#176b52' : '#f1f5f9',
+            color: onlineTab === 'All' ? '#ffffff' : '#475569',
+            borderRadius: '8px',
+            padding: '7px 14px',
+            fontSize: '11px',
+            fontWeight: 700,
+            cursor: 'pointer'
+          }}
+        >
+          All DB Records ({dbOrders.length})
         </button>
       </div>
 
       {/* Orders List Container */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: '14px' }}>
-        {/* NEW INCOMING ORDERS (Pending Acceptance) */}
-        {(onlineTab === 'New' || onlineTab === 'All') && pendingOrders.map(order => (
-          <div 
-            key={order.id}
-            style={{
-              background: '#ffffff',
-              border: '2px solid #fecaca',
-              borderRadius: '12px',
-              padding: '14px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '10px',
-              boxShadow: '0 4px 12px rgba(220,38,38,0.06)',
-              position: 'relative'
-            }}
-          >
-            {/* Top Bar */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span 
-                  style={{
-                    background: order.platform === 'Zomato' ? '#dc2626' : '#ea580c',
-                    color: '#ffffff',
-                    padding: '3px 8px',
-                    borderRadius: '6px',
-                    fontWeight: 800,
-                    fontSize: '11px'
-                  }}
-                >
-                  {order.platform === 'Zomato' ? '🔴 ZOMATO' : '🟠 SWIGGY'}
-                </span>
-                <strong style={{ fontSize: '13px', color: '#0f172a' }}>{order.orderNumber}</strong>
-              </div>
-              <span style={{ fontSize: '10px', color: '#64748b', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <Clock size={11} /> {new Date(order.placedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-              </span>
-            </div>
-
-            {/* Customer & Address */}
-            <div style={{ background: '#f8fafc', padding: '8px 10px', borderRadius: '8px', fontSize: '11px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, color: '#1e293b' }}>
-                <span>{order.customerName}</span>
-                <span style={{ color: '#0284c7' }}>{order.customerPhone}</span>
-              </div>
-              <div style={{ color: '#475569', fontSize: '10px', marginTop: '3px', display: 'flex', alignItems: 'flex-start', gap: '4px' }}>
-                <MapPin size={12} style={{ flexShrink: 0, marginTop: '2px', color: '#64748b' }} />
-                <span>{order.deliveryAddress}</span>
-              </div>
-              {order.instructions && (
-                <div style={{ marginTop: '4px', fontSize: '10px', color: '#b45309', background: '#fef3c7', padding: '3px 6px', borderRadius: '4px' }}>
-                  <b>Instructions:</b> {order.instructions}
-                </div>
-              )}
-            </div>
-
-            {/* Items List */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', borderTop: '1px dashed #e2e8f0', borderBottom: '1px dashed #e2e8f0', padding: '8px 0' }}>
-              {order.items.map((it, idx) => (
-                <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <span className={it.isVeg ? 'veg-tag' : 'non-veg-tag'} style={{ width: '8px', height: '8px' }} />
-                    <span style={{ fontWeight: 600, color: '#1e293b' }}>{it.name}</span>
-                    <b style={{ color: '#0f172a' }}>× {it.qty}</b>
-                  </div>
-                  <span style={{ color: '#64748b' }}>₹{it.price * it.qty}</span>
-                </div>
-              ))}
-            </div>
-
-            {/* Total & Rider Status */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '11px' }}>
-              <div>
-                <span style={{ fontSize: '10px', color: '#16a34a', fontWeight: 700 }}>✓ {order.paymentStatus}</span>
-                <div style={{ fontSize: '10px', color: '#64748b' }}>
-                  🛵 {order.riderName} ({order.riderEta})
-                </div>
-              </div>
-              <div style={{ textAlign: 'right' }}>
-                <span style={{ fontSize: '10px', color: '#64748b' }}>Bill Amount:</span>
-                <div style={{ fontSize: '15px', fontWeight: 800, color: '#176b52' }}>₹{order.total}</div>
-              </div>
-            </div>
-
-            {/* Accept / Reject Action Buttons */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 60px', gap: '6px', marginTop: '4px' }}>
-              <button
-                onClick={() => handleAcceptOnlineOrder(order, 15)}
-                style={{
-                  border: 0,
-                  background: '#16a34a',
-                  color: '#ffffff',
-                  borderRadius: '7px',
-                  padding: '9px 8px',
-                  fontSize: '11px',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '5px'
-                }}
-              >
-                <Check size={14} /> Accept (15m)
-              </button>
-
-              <button
-                onClick={() => handleAcceptOnlineOrder(order, 25)}
-                style={{
-                  border: 0,
-                  background: '#0284c7',
-                  color: '#ffffff',
-                  borderRadius: '7px',
-                  padding: '9px 8px',
-                  fontSize: '11px',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '5px'
-                }}
-              >
-                <Check size={14} /> Accept (25m)
-              </button>
-
-              <button
-                onClick={() => handleRejectOnlineOrder(order.id, order.platform)}
-                style={{
-                  border: '1px solid #fecaca',
-                  background: '#fef2f2',
-                  color: '#dc2626',
-                  borderRadius: '7px',
-                  padding: '9px 6px',
-                  fontSize: '11px',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}
-                title="Reject this order"
-              >
-                <X size={14} /> Reject
-              </button>
-            </div>
-          </div>
-        ))}
-
-        {/* PREPARING / IN KITCHEN ORDERS */}
-        {(onlineTab === 'In Kitchen' || onlineTab === 'All') && dbDeliveryOrders
-          .filter(o => o.status === 'In Kitchen' || o.status === 'Preparing')
+        {dbOrders
+          .filter(order => {
+            if (onlineTab === 'New') return order.status === 'Pending Acceptance';
+            if (onlineTab === 'In Kitchen') return order.status === 'In Kitchen' || order.status === 'Preparing' || order.status === 'Accepted';
+            if (onlineTab === 'Ready') return order.status === 'Ready for Pickup' || order.status === 'Ready to Serve';
+            if (onlineTab === 'Completed') return order.status === 'Completed' || order.status === 'Dispatched' || order.status === 'Delivered';
+            return true;
+          })
           .map(order => {
-            const items = Array.isArray(order.items) 
-              ? order.items 
-              : typeof order.itemsJson === 'string' 
+            const items = typeof order.itemsJson === 'string' 
               ? JSON.parse(order.itemsJson || '[]') 
-              : [];
+              : (order.items || []);
 
-            const isZomato = (order.tableCode || '').toLowerCase().includes('zomato') || (order.notes || '').includes('ZOMATO');
-            const isSwiggy = (order.tableCode || '').toLowerCase().includes('swiggy') || (order.notes || '').includes('SWIGGY');
+            const isPending = order.status === 'Pending Acceptance';
+            const isKitchen = order.status === 'In Kitchen' || order.status === 'Preparing' || order.status === 'Accepted';
+            const isReady = order.status === 'Ready for Pickup' || order.status === 'Ready to Serve';
+            const isDone = order.status === 'Completed' || order.status === 'Dispatched' || order.status === 'Delivered';
 
             return (
               <div 
                 key={order.id}
                 style={{
                   background: '#ffffff',
-                  border: '1px solid #bae6fd',
+                  border: isPending ? '2px solid #fecaca' : isReady ? '2px solid #86efac' : '1px solid #e2e8f0',
                   borderRadius: '12px',
                   padding: '14px',
                   display: 'flex',
                   flexDirection: 'column',
                   gap: '10px',
-                  boxShadow: '0 2px 8px rgba(2,132,199,0.06)'
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
+                  position: 'relative'
                 }}
               >
+                {/* Top Bar with Platform Badge & DB ID */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <span 
                       style={{
-                        background: isZomato ? '#dc2626' : isSwiggy ? '#ea580c' : '#0284c7',
+                        background: order.platform === 'Zomato' ? '#dc2626' : '#ea580c',
                         color: '#ffffff',
                         padding: '3px 8px',
                         borderRadius: '6px',
@@ -763,196 +649,261 @@ export default function OnlineDeliveryHub({
                         fontSize: '11px'
                       }}
                     >
-                      {isZomato ? '🔴 ZOMATO' : isSwiggy ? '🟠 SWIGGY' : '🛵 DELIVERY'}
+                      {order.platform === 'Zomato' ? '🔴 ZOMATO' : '🟠 SWIGGY'}
                     </span>
                     <strong style={{ fontSize: '13px', color: '#0f172a' }}>{order.orderNumber}</strong>
+                    <span style={{ fontSize: '9px', color: '#94a3b8', background: '#f1f5f9', padding: '1px 5px', borderRadius: '4px' }}>
+                      DB #{order.id}
+                    </span>
                   </div>
-                  <span style={{ fontSize: '9px', fontWeight: 700, color: '#0284c7', background: '#e0f2fe', padding: '2px 7px', borderRadius: '10px' }}>
-                    🍳 In Kitchen
-                  </span>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <button
+                      onClick={() => handleOpenEdit(order)}
+                      style={{
+                        border: '1px solid #cbd5e1',
+                        background: '#ffffff',
+                        color: '#475569',
+                        borderRadius: '5px',
+                        padding: '3px 7px',
+                        fontSize: '10px',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '3px'
+                      }}
+                      title="Check and modify order in database"
+                    >
+                      <Edit2 size={11} /> Modify
+                    </button>
+                    <span style={{ fontSize: '10px', color: '#64748b' }}>
+                      {order.createdAt ? new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Just now'}
+                    </span>
+                  </div>
                 </div>
 
-                <div style={{ fontSize: '11px', color: '#475569' }}>
-                  <div style={{ fontWeight: 700, color: '#1e293b' }}>Customer: {order.customerName} ({order.customerPhone})</div>
-                  {order.notes && (
-                    <div style={{ fontSize: '10px', color: '#0369a1', background: '#f0f9ff', padding: '4px 6px', borderRadius: '4px', marginTop: '4px' }}>
-                      {order.notes}
+                {/* Customer & Address Details */}
+                <div style={{ background: '#f8fafc', padding: '8px 10px', borderRadius: '8px', fontSize: '11px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, color: '#1e293b' }}>
+                    <span>{order.customerName}</span>
+                    <span style={{ color: '#0284c7' }}>{order.customerPhone}</span>
+                  </div>
+                  <div style={{ color: '#475569', fontSize: '10px', marginTop: '3px', display: 'flex', alignItems: 'flex-start', gap: '4px' }}>
+                    <MapPin size={12} style={{ flexShrink: 0, marginTop: '2px', color: '#64748b' }} />
+                    <span>{order.deliveryAddress}</span>
+                  </div>
+                  {order.instructions && (
+                    <div style={{ marginTop: '4px', fontSize: '10px', color: '#b45309', background: '#fef3c7', padding: '3px 6px', borderRadius: '4px' }}>
+                      <b>Instructions:</b> {order.instructions}
                     </div>
                   )}
                 </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', borderTop: '1px dashed #e2e8f0', borderBottom: '1px dashed #e2e8f0', padding: '6px 0' }}>
+                {/* Items List */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', borderTop: '1px dashed #e2e8f0', borderBottom: '1px dashed #e2e8f0', padding: '8px 0' }}>
                   {items.map((it, idx) => (
                     <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px' }}>
-                      <span style={{ color: '#1e293b', fontWeight: 600 }}>{it.name}</span>
-                      <b>× {it.qty}</b>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span className={it.isVeg ? 'veg-tag' : 'non-veg-tag'} style={{ width: '8px', height: '8px' }} />
+                        <span style={{ fontWeight: 600, color: '#1e293b' }}>{it.name}</span>
+                        <b style={{ color: '#0f172a' }}>× {it.qty}</b>
+                      </div>
+                      <span style={{ color: '#64748b' }}>₹{it.price * it.qty}</span>
                     </div>
                   ))}
                 </div>
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: '13px', fontWeight: 800, color: '#176b52' }}>₹{order.total || order.subtotal}</span>
-                  <div style={{ display: 'flex', gap: '6px' }}>
+                {/* Amount, Rider, and Current DB Status */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '11px' }}>
+                  <div>
+                    <span style={{ fontSize: '10px', color: '#16a34a', fontWeight: 700 }}>✓ {order.paymentStatus}</span>
+                    <div style={{ fontSize: '10px', color: '#64748b' }}>
+                      🛵 {order.riderName} ({order.riderEta || 'ETA pending'})
+                    </div>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <span style={{ fontSize: '10px', color: '#64748b' }}>DB Status: <b style={{ color: '#0f172a' }}>{order.status}</b></span>
+                    <div style={{ fontSize: '15px', fontWeight: 800, color: '#176b52' }}>₹{order.totalAmount}</div>
+                  </div>
+                </div>
+
+                {/* Contextual Actions depending on DB status */}
+                <div style={{ display: 'flex', gap: '6px', marginTop: '4px' }}>
+                  {isPending && (
+                    <>
+                      <button
+                        onClick={() => handleAcceptOnlineOrder(order, 15)}
+                        style={{
+                          flex: 1,
+                          border: 0,
+                          background: '#16a34a',
+                          color: '#ffffff',
+                          borderRadius: '7px',
+                          padding: '9px 8px',
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '5px'
+                        }}
+                      >
+                        <Check size={14} /> Accept (15m)
+                      </button>
+
+                      <button
+                        onClick={() => handleAcceptOnlineOrder(order, 25)}
+                        style={{
+                          flex: 1,
+                          border: 0,
+                          background: '#0284c7',
+                          color: '#ffffff',
+                          borderRadius: '7px',
+                          padding: '9px 8px',
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '5px'
+                        }}
+                      >
+                        <Check size={14} /> Accept (25m)
+                      </button>
+
+                      <button
+                        onClick={() => handleRejectOnlineOrder(order.id, order.platform)}
+                        style={{
+                          border: '1px solid #fecaca',
+                          background: '#fef2f2',
+                          color: '#dc2626',
+                          borderRadius: '7px',
+                          padding: '9px 10px',
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          cursor: 'pointer'
+                        }}
+                        title="Reject this order in DB"
+                      >
+                        <X size={14} />
+                      </button>
+                    </>
+                  )}
+
+                  {isKitchen && (
+                    <>
+                      <button
+                        onClick={() => handlePrintPackingSlip(order)}
+                        style={{
+                          flex: 1,
+                          border: '1px solid #cbd5e1',
+                          background: '#ffffff',
+                          color: '#334155',
+                          borderRadius: '7px',
+                          padding: '8px 10px',
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '4px'
+                        }}
+                      >
+                        <Printer size={13} /> Print Slip
+                      </button>
+
+                      <button
+                        onClick={() => handleMarkReady(order)}
+                        style={{
+                          flex: 1.2,
+                          border: 0,
+                          background: '#16a34a',
+                          color: '#ffffff',
+                          borderRadius: '7px',
+                          padding: '8px 12px',
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '4px'
+                        }}
+                      >
+                        <CheckCircle2 size={13} /> Food Ready
+                      </button>
+                    </>
+                  )}
+
+                  {isReady && (
+                    <>
+                      <button
+                        onClick={() => handlePrintPackingSlip(order)}
+                        style={{
+                          border: '1px solid #cbd5e1',
+                          background: '#ffffff',
+                          color: '#334155',
+                          borderRadius: '7px',
+                          padding: '8px 10px',
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          cursor: 'pointer'
+                        }}
+                      >
+                        <Printer size={13} /> Print Slip
+                      </button>
+
+                      <button
+                        onClick={() => handleMarkCompleted(order)}
+                        style={{
+                          flex: 1,
+                          border: 0,
+                          background: '#166534',
+                          color: '#ffffff',
+                          borderRadius: '7px',
+                          padding: '8px 14px',
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '5px'
+                        }}
+                      >
+                        <Check size={13} /> Handover to Rider (Done)
+                      </button>
+                    </>
+                  )}
+
+                  {isDone && (
                     <button
                       onClick={() => handlePrintPackingSlip(order)}
                       style={{
                         border: '1px solid #cbd5e1',
                         background: '#ffffff',
-                        color: '#334155',
+                        color: '#475569',
                         borderRadius: '6px',
                         padding: '6px 10px',
-                        fontSize: '11px',
+                        fontSize: '10px',
                         fontWeight: 700,
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '4px'
+                        cursor: 'pointer'
                       }}
                     >
-                      <Printer size={13} /> Print Slip
+                      <Printer size={12} /> Reprint Thermal Slip
                     </button>
-
-                    <button
-                      onClick={() => handleMarkReady(order.id, order.orderNumber)}
-                      style={{
-                        border: 0,
-                        background: '#16a34a',
-                        color: '#ffffff',
-                        borderRadius: '6px',
-                        padding: '6px 12px',
-                        fontSize: '11px',
-                        fontWeight: 700,
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '4px'
-                      }}
-                    >
-                      <CheckCircle2 size={13} /> Food Ready
-                    </button>
-                  </div>
+                  )}
                 </div>
               </div>
             );
           })}
 
-        {/* FOOD READY / RIDER ASSIGNED */}
-        {(onlineTab === 'Ready' || onlineTab === 'All') && dbDeliveryOrders
-          .filter(o => o.status === 'Ready to Serve')
-          .map(order => {
-            return (
-              <div 
-                key={order.id}
-                style={{
-                  background: '#f0fdf4',
-                  border: '1px solid #86efac',
-                  borderRadius: '12px',
-                  padding: '14px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '10px'
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ background: '#16a34a', color: '#ffffff', padding: '3px 8px', borderRadius: '6px', fontWeight: 800, fontSize: '11px' }}>
-                      🛵 FOOD READY
-                    </span>
-                    <strong style={{ fontSize: '13px' }}>{order.orderNumber}</strong>
-                  </div>
-                  <span style={{ fontSize: '10px', color: '#166534', fontWeight: 700 }}>Awaiting Rider Pickup</span>
-                </div>
-
-                <div style={{ fontSize: '11px', color: '#334155' }}>
-                  <div><strong>Customer:</strong> {order.customerName} ({order.customerPhone})</div>
-                  {order.notes && <div style={{ fontSize: '10px', marginTop: '3px', color: '#166534' }}>{order.notes}</div>}
-                </div>
-
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px' }}>
-                  <button
-                    onClick={() => handlePrintPackingSlip(order)}
-                    style={{
-                      border: '1px solid #cbd5e1',
-                      background: '#ffffff',
-                      color: '#334155',
-                      borderRadius: '6px',
-                      padding: '6px 10px',
-                      fontSize: '11px',
-                      fontWeight: 700,
-                      cursor: 'pointer'
-                    }}
-                  >
-                    <Printer size={13} /> Print Slip
-                  </button>
-
-                  <button
-                    onClick={() => handleMarkCompleted(order.id, order.orderNumber)}
-                    style={{
-                      border: 0,
-                      background: '#166534',
-                      color: '#ffffff',
-                      borderRadius: '6px',
-                      padding: '7px 14px',
-                      fontSize: '11px',
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '5px'
-                    }}
-                  >
-                    <Check size={13} /> Handover to Rider (Done)
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-
-        {/* COMPLETED / DISPATCHED */}
-        {onlineTab === 'Completed' && dbDeliveryOrders
-          .filter(o => o.status === 'Completed' || o.status === 'Delivered')
-          .map(order => (
-            <div 
-              key={order.id}
-              style={{
-                background: '#f8fafc',
-                border: '1px solid #e2e8f0',
-                borderRadius: '12px',
-                padding: '12px 14px',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center'
-              }}
-            >
-              <div>
-                <div style={{ fontWeight: 700, fontSize: '12px', color: '#1e293b' }}>
-                  {order.orderNumber} · {order.customerName}
-                </div>
-                <div style={{ fontSize: '10px', color: '#64748b', marginTop: '2px' }}>
-                  {order.tableCode} · ₹{order.total || order.subtotal} · Delivered
-                </div>
-              </div>
-              <button
-                onClick={() => handlePrintPackingSlip(order)}
-                style={{
-                  border: '1px solid #cbd5e1',
-                  background: '#ffffff',
-                  borderRadius: '5px',
-                  padding: '5px 8px',
-                  fontSize: '10px',
-                  cursor: 'pointer'
-                }}
-              >
-                Receipt
-              </button>
-            </div>
-          ))}
-
-        {/* Empty state when no orders in active tab */}
-        {((onlineTab === 'New' && pendingCount === 0) ||
-          (onlineTab === 'In Kitchen' && preparingCount === 0) ||
-          (onlineTab === 'Ready' && readyCount === 0) ||
-          (onlineTab === 'Completed' && completedCount === 0)) && (
+        {/* Empty state */}
+        {dbOrders.length === 0 && (
           <div 
             style={{ 
               gridColumn: '1 / -1', 
@@ -966,46 +917,199 @@ export default function OnlineDeliveryHub({
           >
             <ShoppingBag size={34} style={{ color: '#cbd5e1', marginBottom: '8px' }} />
             <div style={{ fontWeight: 700, fontSize: '13px', color: '#334155' }}>
-              No {onlineTab} delivery orders right now
+              No orders found in database table `online_delivery_orders`
             </div>
             <p style={{ fontSize: '11px', color: '#94a3b8', margin: '4px 0 12px 0' }}>
-              Click on <b>+ Test Zomato Order</b> or <b>+ Test Swiggy Order</b> above to simulate an incoming online order!
+              Click on <b>+ New Zomato DB Order</b> or <b>+ New Swiggy DB Order</b> above to save an order directly into MSSQL!
             </p>
-            <div style={{ display: 'flex', justifyContent: 'center', gap: '8px' }}>
-              <button
-                onClick={() => handleSimulateOrder('Zomato')}
-                style={{
-                  border: '1px solid #fecaca',
-                  background: '#dc2626',
-                  color: '#ffffff',
-                  borderRadius: '6px',
-                  padding: '6px 12px',
-                  fontSize: '11px',
-                  fontWeight: 700,
-                  cursor: 'pointer'
-                }}
-              >
-                Simulate Zomato Order
-              </button>
-              <button
-                onClick={() => handleSimulateOrder('Swiggy')}
-                style={{
-                  border: '1px solid #fed7aa',
-                  background: '#ea580c',
-                  color: '#ffffff',
-                  borderRadius: '6px',
-                  padding: '6px 12px',
-                  fontSize: '11px',
-                  fontWeight: 700,
-                  cursor: 'pointer'
-                }}
-              >
-                Simulate Swiggy Order
-              </button>
-            </div>
           </div>
         )}
       </div>
+
+      {/* EDIT / MODIFY ORDER MODAL */}
+      {editingOrder && (
+        <div 
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(15, 23, 42, 0.65)',
+            display: 'grid',
+            placeItems: 'center',
+            zIndex: 100,
+            padding: '20px'
+          }}
+        >
+          <div 
+            style={{
+              background: '#ffffff',
+              borderRadius: '16px',
+              padding: '22px',
+              width: 'min(520px, 100%)',
+              maxHeight: '90vh',
+              overflowY: 'auto',
+              boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '16px', color: '#0f172a' }}>
+                  Modify Order in DB: {editingOrder.orderNumber}
+                </h3>
+                <span style={{ fontSize: '11px', color: '#64748b' }}>
+                  Table: online_delivery_orders · Record ID #{editingOrder.id}
+                </span>
+              </div>
+              <button 
+                onClick={() => setEditingOrder(null)}
+                style={{ border: 0, background: 'transparent', cursor: 'pointer', color: '#64748b' }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                <div>
+                  <label style={{ fontSize: '10px', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '4px' }}>CUSTOMER NAME</label>
+                  <input
+                    value={editForm.customerName}
+                    onChange={e => setEditForm({ ...editForm, customerName: e.target.value })}
+                    style={{ width: '100%', padding: '6px 8px', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '11px', boxSizing: 'border-box' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: '10px', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '4px' }}>MOBILE NUMBER</label>
+                  <input
+                    value={editForm.customerPhone}
+                    onChange={e => setEditForm({ ...editForm, customerPhone: e.target.value })}
+                    style={{ width: '100%', padding: '6px 8px', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '11px', boxSizing: 'border-box' }}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '10px', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '4px' }}>DELIVERY ADDRESS</label>
+                <textarea
+                  rows={2}
+                  value={editForm.deliveryAddress}
+                  onChange={e => setEditForm({ ...editForm, deliveryAddress: e.target.value })}
+                  style={{ width: '100%', padding: '6px 8px', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '11px', boxSizing: 'border-box', resize: 'vertical' }}
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '10px', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '4px' }}>SPECIAL INSTRUCTIONS</label>
+                <input
+                  value={editForm.instructions}
+                  onChange={e => setEditForm({ ...editForm, instructions: e.target.value })}
+                  style={{ width: '100%', padding: '6px 8px', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '11px', boxSizing: 'border-box' }}
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                <div>
+                  <label style={{ fontSize: '10px', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '4px' }}>RIDER NAME</label>
+                  <input
+                    value={editForm.riderName}
+                    onChange={e => setEditForm({ ...editForm, riderName: e.target.value })}
+                    style={{ width: '100%', padding: '6px 8px', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '11px', boxSizing: 'border-box' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: '10px', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '4px' }}>RIDER PHONE</label>
+                  <input
+                    value={editForm.riderPhone}
+                    onChange={e => setEditForm({ ...editForm, riderPhone: e.target.value })}
+                    style={{ width: '100%', padding: '6px 8px', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '11px', boxSizing: 'border-box' }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                <div>
+                  <label style={{ fontSize: '10px', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '4px' }}>DB STATUS</label>
+                  <select
+                    value={editForm.status}
+                    onChange={e => setEditForm({ ...editForm, status: e.target.value })}
+                    style={{ width: '100%', padding: '6px 8px', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '11px', boxSizing: 'border-box' }}
+                  >
+                    <option value="Pending Acceptance">Pending Acceptance</option>
+                    <option value="In Kitchen">In Kitchen</option>
+                    <option value="Ready for Pickup">Ready for Pickup</option>
+                    <option value="Completed">Completed</option>
+                    <option value="Rejected">Rejected</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: '10px', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '4px' }}>PREP TIME (MINS)</label>
+                  <input
+                    type="number"
+                    value={editForm.prepTimeMinutes}
+                    onChange={e => setEditForm({ ...editForm, prepTimeMinutes: parseInt(e.target.value) || 15 })}
+                    style={{ width: '100%', padding: '6px 8px', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '11px', boxSizing: 'border-box' }}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '20px', paddingTop: '12px', borderTop: '1px solid #e2e8f0' }}>
+              <button
+                onClick={() => handleDeleteOrder(editingOrder.id, editingOrder.orderNumber)}
+                style={{
+                  border: '1px solid #fecaca',
+                  background: '#fef2f2',
+                  color: '#dc2626',
+                  borderRadius: '6px',
+                  padding: '7px 12px',
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px'
+                }}
+              >
+                <Trash2 size={12} /> Delete from DB
+              </button>
+
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  onClick={() => setEditingOrder(null)}
+                  style={{
+                    border: '1px solid #cbd5e1',
+                    background: '#ffffff',
+                    borderRadius: '6px',
+                    padding: '7px 14px',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    cursor: 'pointer'
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveEdit}
+                  style={{
+                    border: 0,
+                    background: '#176b52',
+                    color: '#ffffff',
+                    borderRadius: '6px',
+                    padding: '7px 16px',
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '5px'
+                  }}
+                >
+                  <Save size={13} /> Save to MSSQL DB
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

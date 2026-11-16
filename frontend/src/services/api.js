@@ -346,3 +346,55 @@ export async function deleteUser(id) {
   if (!res.ok) throw new Error('Failed to delete user');
   return true;
 }
+
+// Online Delivery Orders (Zomato, Swiggy, ONDC - Database Table)
+export async function getDeliveryOrders(outletId, status) {
+  let url = `${API_BASE}/api/delivery-orders`;
+  const params = [];
+  if (outletId) params.push(`outletId=${outletId}`);
+  if (status && status !== 'All') params.push(`status=${encodeURIComponent(status)}`);
+  if (params.length > 0) url += `?${params.join('&')}`;
+
+  const res = await fetch(url, { headers: getAuthHeaders() });
+  if (!res.ok) throw new Error('Failed to fetch online delivery orders from database');
+  return res.json();
+}
+
+export async function createDeliveryOrder(payload) {
+  const res = await fetch(`${API_BASE}/api/delivery-orders`, {
+    method: 'POST',
+    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(payload)
+  });
+  if (!res.ok) throw new Error('Failed to create delivery order in database');
+  return res.json();
+}
+
+export async function updateDeliveryOrderStatus(id, status, prepTimeMinutes) {
+  const res = await fetch(`${API_BASE}/api/delivery-orders/${id}/status`, {
+    method: 'PUT',
+    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ status, prepTimeMinutes })
+  });
+  if (!res.ok) throw new Error('Failed to update delivery order status');
+  return res.json();
+}
+
+export async function updateDeliveryOrder(id, payload) {
+  const res = await fetch(`${API_BASE}/api/delivery-orders/${id}`, {
+    method: 'PUT',
+    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(payload)
+  });
+  if (!res.ok) throw new Error('Failed to update delivery order details');
+  return res.json();
+}
+
+export async function deleteDeliveryOrder(id) {
+  const res = await fetch(`${API_BASE}/api/delivery-orders/${id}`, {
+    method: 'DELETE',
+    headers: getAuthHeaders()
+  });
+  if (!res.ok) throw new Error('Failed to delete delivery order');
+  return true;
+}
